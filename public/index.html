@@ -2,784 +2,763 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent Terminal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0d0d">
+<title>termi</title>
 <script src="/socket.io/socket.io.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;700;800&display=swap');
-
   :root {
-    --bg: #0a0a0f;
-    --surface: #111118;
-    --border: #1e1e2e;
-    --accent: #00ff88;
-    --accent2: #0088ff;
-    --danger: #ff3366;
-    --text: #e0e0f0;
-    --muted: #4a4a6a;
-    --agent: #00ff88;
-    --command: #0088ff;
-    --error: #ff3366;
+    --bg:        #0d0d0d;
+    --surface:   #161616;
+    --surface2:  #1e1e1e;
+    --border:    #2a2a2a;
+    --accent:    #00e676;
+    --accent-dim:#00e67622;
+    --blue:      #448aff;
+    --blue-dim:  #448aff22;
+    --red:       #ff5252;
+    --text:      #ececec;
+    --muted:     #666;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'Space Grotesk', sans-serif;
+    --radius:    16px;
+    --radius-sm: 10px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top:    env(safe-area-inset-top, 0px);
   }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'JetBrains Mono', monospace;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  /* Scanline effect */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0,0,0,0.03) 2px,
-      rgba(0,0,0,0.03) 4px
-    );
-    pointer-events: none;
-    z-index: 100;
-  }
-
-  header {
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: var(--surface);
-  }
-
-  .logo {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 18px;
-    letter-spacing: -0.5px;
-    color: var(--accent);
-  }
-
-  .logo span { color: var(--text); }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-    display: inline-block;
-    margin-right: 8px;
-    transition: all 0.3s;
-  }
-
-  .status-dot.connected {
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
-    animation: pulse 2s infinite;
-  }
-
-  .status-dot.error { background: var(--danger); }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  .status-text {
-    font-size: 11px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-  }
-
-  .connect-btn {
-    background: transparent;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    padding: 6px 16px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.2s;
-    letter-spacing: 1px;
-  }
-
-  .connect-btn:hover {
-    background: var(--accent);
-    color: var(--bg);
-  }
-
-  .connect-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  /* Mode tabs */
-  .tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    padding: 0 24px;
-  }
-
-  .tab {
-    padding: 10px 20px;
-    font-size: 11px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    cursor: pointer;
-    color: var(--muted);
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s;
-    background: none;
-    border-top: none;
-    border-left: none;
-    border-right: none;
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  .tab.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-  }
-
-  /* Messages */
-  .messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    scroll-behavior: smooth;
-  }
-
-  .messages::-webkit-scrollbar { width: 4px; }
-  .messages::-webkit-scrollbar-track { background: transparent; }
-  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-  .message {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    animation: fadeIn 0.2s ease;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .message-meta {
-    font-size: 10px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .message-label {
-    font-size: 10px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    padding: 2px 8px;
-    border-radius: 2px;
-  }
-
-  .label-you {
-    background: rgba(0,136,255,0.15);
-    color: var(--command);
-    border: 1px solid rgba(0,136,255,0.3);
-  }
-
-  .label-agent {
-    background: rgba(0,255,136,0.1);
-    color: var(--agent);
-    border: 1px solid rgba(0,255,136,0.2);
-  }
-
-  .label-cmd {
-    background: rgba(0,136,255,0.1);
-    color: var(--command);
-    border: 1px solid rgba(0,136,255,0.2);
-  }
-
-  .label-error {
-    background: rgba(255,51,102,0.1);
-    color: var(--error);
-    border: 1px solid rgba(255,51,102,0.2);
-  }
-
-  .label-system {
-    background: rgba(255,255,255,0.05);
-    color: var(--muted);
-    border: 1px solid var(--border);
-  }
-
-  .message-content {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 14px 16px;
-    font-size: 13px;
-    line-height: 1.7;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-width: 100%;
-  }
-
-  .message-content.user-msg {
-    border-left: 3px solid var(--command);
-    background: rgba(0,136,255,0.05);
-  }
-
-  .message-content.agent-msg {
-    border-left: 3px solid var(--agent);
-    color: #b0ffcc;
-  }
-
-  .message-content.error-msg {
-    border-left: 3px solid var(--danger);
-    color: var(--error);
-  }
-
-  .message-content.thinking-msg {
-    border-left: 3px solid var(--muted);
-    color: var(--muted);
-    font-style: italic;
-  }
-
-  /* Thinking animation */
-  .thinking-dots::after {
-    content: '...';
-    animation: dots 1.2s steps(4, end) infinite;
-  }
-
-  @keyframes dots {
-    0%, 20% { content: ''; }
-    40% { content: '.'; }
-    60% { content: '..'; }
-    80%, 100% { content: '...'; }
-  }
-
-  /* Input area */
-  .input-area {
-    border-top: 1px solid var(--border);
-    padding: 16px 24px;
-    background: var(--surface);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .input-row {
-    display: flex;
-    gap: 10px;
-    align-items: flex-end;
-  }
-
-  .input-wrapper {
-    flex: 1;
-    position: relative;
-  }
-
-  .prompt-prefix {
-    position: absolute;
-    left: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--accent);
-    font-size: 14px;
-    pointer-events: none;
-    line-height: 1;
-  }
-
-  textarea {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    padding: 12px 14px 12px 30px;
-    resize: none;
-    outline: none;
-    border-radius: 4px;
-    line-height: 1.5;
-    min-height: 44px;
-    max-height: 120px;
-    transition: border-color 0.2s;
-  }
-
-  textarea:focus { border-color: var(--accent); }
-  textarea::placeholder { color: var(--muted); }
-
-  .send-btn {
-    background: var(--accent);
-    color: var(--bg);
-    border: none;
-    padding: 12px 20px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.2s;
-    white-space: nowrap;
-    height: 44px;
-  }
-
-  .send-btn:hover { background: #00cc6a; }
-  .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-
-  .mode-hint {
-    font-size: 10px;
-    color: var(--muted);
-    letter-spacing: 0.5px;
-  }
-
-  .mode-hint span {
-    color: var(--accent);
-  }
-
-  /* Quick commands */
-  .quick-cmds {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .quick-cmd {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    padding: 4px 12px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    cursor: pointer;
-    border-radius: 2px;
-    transition: all 0.2s;
-    letter-spacing: 0.5px;
-  }
-
-  .quick-cmd:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  /* Auth overlay */
-  .auth-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 200;
-    flex-direction: column;
-    gap: 24px;
-  }
-
-  .auth-box {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    padding: 40px;
-    width: 360px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .auth-title {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 24px;
-    color: var(--accent);
-  }
-
-  .auth-subtitle {
-    font-size: 11px;
-    color: var(--muted);
-    line-height: 1.6;
-  }
-
-  .auth-input {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    padding: 12px 14px;
-    outline: none;
-    width: 100%;
-    border-radius: 4px;
-  }
-
-  .auth-input:focus { border-color: var(--accent); }
-
-  .auth-btn {
-    background: var(--accent);
-    color: var(--bg);
-    border: none;
-    padding: 12px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    cursor: pointer;
-    width: 100%;
-    transition: all 0.2s;
-  }
-
-  .auth-btn:hover { background: #00cc6a; }
-  .auth-error { color: var(--danger); font-size: 11px; }
-
-  /* ─── MOBILE RESPONSIVE ─────────────────────────── */
-  @media (max-width: 600px) {
-    header {
-      padding: 12px 16px;
-    }
-
-    .logo { font-size: 15px; }
-
-    .connect-btn {
-      padding: 5px 10px;
-      font-size: 10px;
-    }
-
-    .tabs { padding: 0 12px; }
-
-    .tab {
-      padding: 8px 12px;
-      font-size: 10px;
-      letter-spacing: 0.5px;
-    }
-
-    .messages {
-      padding: 12px;
-      gap: 12px;
-    }
-
-    .message-content {
-      font-size: 12px;
-      padding: 10px 12px;
-    }
-
-    .message-label {
-      font-size: 9px;
-      padding: 2px 6px;
-    }
-
-    .input-area {
-      padding: 10px 12px;
-      gap: 8px;
-    }
-
-    .quick-cmds {
-      gap: 6px;
-      overflow-x: auto;
-      flex-wrap: nowrap;
-      padding-bottom: 4px;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-    }
-
-    .quick-cmds::-webkit-scrollbar { display: none; }
-
-    .quick-cmd {
-      white-space: nowrap;
-      flex-shrink: 0;
-      font-size: 10px;
-      padding: 5px 10px;
-    }
-
-    textarea {
-      font-size: 16px; /* prevents iOS zoom on focus */
-      padding: 10px 10px 10px 28px;
-    }
-
-    .send-btn {
-      padding: 10px 14px;
-      font-size: 11px;
-      height: 42px;
-    }
-
-    .mode-hint { display: none; }
-
-    .auth-box {
-      width: 90%;
-      padding: 28px 20px;
-    }
-
-    .auth-title { font-size: 20px; }
-
-    /* Fix viewport height on mobile browsers */
-    body {
-      height: 100dvh;
-    }
-  }
-
-  @media (max-width: 380px) {
-    .tab { padding: 8px 8px; font-size: 9px; }
-    .logo { font-size: 13px; }
-  }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+height: 100%;
+height: 100dvh;
+background: var(--bg);
+color: var(--text);
+font-family: var(--sans);
+overflow: hidden;
+-webkit-font-smoothing: antialiased;
+}
+
+/* ── Auth Screen ─────────────────────────────────── */
+#auth {
+position: fixed;
+inset: 0;
+background: var(--bg);
+display: flex;
+align-items: center;
+justify-content: center;
+z-index: 100;
+padding: 24px;
+}
+
+.auth-card {
+width: 100%;
+max-width: 360px;
+display: flex;
+flex-direction: column;
+gap: 24px;
+}
+
+.auth-logo {
+display: flex;
+align-items: center;
+gap: 10px;
+}
+
+.auth-logo-icon {
+width: 40px;
+height: 40px;
+background: var(--accent);
+border-radius: 10px;
+display: flex;
+align-items: center;
+justify-content: center;
+font-family: var(--mono);
+font-weight: 600;
+font-size: 18px;
+color: #000;
+flex-shrink: 0;
+}
+
+.auth-logo-text {
+font-family: var(--mono);
+font-size: 22px;
+font-weight: 600;
+letter-spacing: -0.5px;
+}
+
+.auth-logo-text span { color: var(--accent); }
+
+.auth-subtitle {
+font-size: 14px;
+color: var(--muted);
+line-height: 1.5;
+}
+
+.auth-field {
+display: flex;
+flex-direction: column;
+gap: 8px;
+}
+
+.auth-label {
+font-size: 11px;
+letter-spacing: 1.5px;
+text-transform: uppercase;
+color: var(--muted);
+font-family: var(--mono);
+}
+
+.auth-input {
+background: var(--surface);
+border: 1.5px solid var(--border);
+border-radius: var(--radius-sm);
+color: var(--text);
+font-family: var(--mono);
+font-size: 15px;
+padding: 14px 16px;
+outline: none;
+width: 100%;
+transition: border-color 0.2s;
+-webkit-appearance: none;
+}
+
+.auth-input:focus { border-color: var(--accent); }
+
+.auth-btn {
+background: var(--accent);
+color: #000;
+border: none;
+border-radius: var(--radius-sm);
+padding: 15px;
+font-family: var(--sans);
+font-size: 15px;
+font-weight: 700;
+cursor: pointer;
+width: 100%;
+transition: opacity 0.2s;
+letter-spacing: 0.3px;
+}
+
+.auth-btn:active { opacity: 0.8; }
+.auth-error { font-size: 12px; color: var(--red); font-family: var(--mono); min-height: 16px; }
+
+/* ── App Layout ──────────────────────────────────── */
+#app {
+display: flex;
+flex-direction: column;
+height: 100%;
+height: 100dvh;
+max-width: 800px;
+margin: 0 auto;
+}
+
+/* ── Header ──────────────────────────────────────── */
+header {
+display: flex;
+align-items: center;
+justify-content: space-between;
+padding: 12px 16px;
+padding-top: calc(12px + var(--safe-top));
+background: var(--surface);
+border-bottom: 1px solid var(--border);
+flex-shrink: 0;
+gap: 12px;
+}
+
+.header-left {
+display: flex;
+align-items: center;
+gap: 10px;
+min-width: 0;
+}
+
+.logo-icon {
+width: 34px;
+height: 34px;
+background: var(--accent);
+border-radius: 8px;
+display: flex;
+align-items: center;
+justify-content: center;
+font-family: var(--mono);
+font-weight: 600;
+font-size: 14px;
+color: #000;
+flex-shrink: 0;
+}
+
+.logo-name {
+font-family: var(--mono);
+font-size: 16px;
+font-weight: 600;
+letter-spacing: -0.3px;
+}
+
+.status-pill {
+display: flex;
+align-items: center;
+gap: 5px;
+background: var(--surface2);
+border: 1px solid var(--border);
+border-radius: 20px;
+padding: 4px 10px;
+font-size: 11px;
+font-family: var(--mono);
+color: var(--muted);
+white-space: nowrap;
+}
+
+.status-dot {
+width: 6px;
+height: 6px;
+border-radius: 50%;
+background: var(--muted);
+flex-shrink: 0;
+transition: all 0.3s;
+}
+
+.status-dot.on {
+background: var(--accent);
+box-shadow: 0 0 6px var(--accent);
+animation: blink 2s infinite;
+}
+
+.status-dot.err { background: var(--red); }
+
+@keyframes blink {
+0%, 100% { opacity: 1; }
+50% { opacity: 0.3; }
+}
+
+.header-right {
+display: flex;
+align-items: center;
+gap: 8px;
+flex-shrink: 0;
+}
+
+.icon-btn {
+width: 34px;
+height: 34px;
+border-radius: 8px;
+background: var(--surface2);
+border: 1px solid var(--border);
+color: var(--muted);
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+font-size: 15px;
+transition: all 0.15s;
+flex-shrink: 0;
+}
+
+.icon-btn:active { background: var(--border); transform: scale(0.93); }
+.icon-btn.connect { color: var(--accent); border-color: var(--accent); }
+.icon-btn.reset { color: var(--red); border-color: transparent; }
+
+/* ── Mode Bar ────────────────────────────────────── */
+.mode-bar {
+display: flex;
+background: var(--surface);
+border-bottom: 1px solid var(--border);
+flex-shrink: 0;
+padding: 0 16px;
+gap: 4px;
+}
+
+.mode-btn {
+flex: 1;
+max-width: 120px;
+padding: 9px 12px;
+font-size: 12px;
+font-family: var(--mono);
+color: var(--muted);
+background: none;
+border: none;
+border-bottom: 2px solid transparent;
+cursor: pointer;
+transition: all 0.15s;
+white-space: nowrap;
+text-align: center;
+}
+
+.mode-btn.active {
+color: var(--accent);
+border-bottom-color: var(--accent);
+}
+
+/* ── Messages ────────────────────────────────────── */
+#messages {
+flex: 1;
+overflow-y: auto;
+overflow-x: hidden;
+padding: 16px;
+display: flex;
+flex-direction: column;
+gap: 12px;
+-webkit-overflow-scrolling: touch;
+overscroll-behavior: contain;
+}
+
+#messages::-webkit-scrollbar { width: 3px; }
+#messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Message bubbles */
+.msg {
+display: flex;
+flex-direction: column;
+gap: 4px;
+max-width: 88%;
+animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes popIn {
+from { opacity: 0; transform: translateY(10px) scale(0.96); }
+to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.msg.you { align-self: flex-end; align-items: flex-end; }
+.msg.agent, .msg.cmd, .msg.system, .msg.error { align-self: flex-start; align-items: flex-start; }
+
+.msg-bubble {
+padding: 10px 14px;
+border-radius: var(--radius);
+font-size: 14px;
+line-height: 1.6;
+word-break: break-word;
+white-space: pre-wrap;
+}
+
+.msg.you .msg-bubble {
+background: var(--blue);
+color: #fff;
+border-bottom-right-radius: 4px;
+}
+
+.msg.agent .msg-bubble {
+background: var(--surface2);
+color: var(--text);
+border-bottom-left-radius: 4px;
+font-family: var(--mono);
+font-size: 13px;
+border: 1px solid var(--border);
+}
+
+.msg.cmd .msg-bubble {
+background: var(--surface2);
+color: #b0e0ff;
+border-bottom-left-radius: 4px;
+font-family: var(--mono);
+font-size: 12px;
+border: 1px solid var(--blue-dim);
+}
+
+.msg.system .msg-bubble {
+background: transparent;
+color: var(--muted);
+font-size: 12px;
+font-family: var(--mono);
+text-align: center;
+border: 1px dashed var(--border);
+border-radius: var(--radius-sm);
+padding: 6px 12px;
+}
+
+.msg.error .msg-bubble {
+background: rgba(255,82,82,0.1);
+color: var(--red);
+border: 1px solid rgba(255,82,82,0.2);
+font-family: var(--mono);
+font-size: 13px;
+border-bottom-left-radius: 4px;
+}
+
+.msg.thinking .msg-bubble {
+background: var(--surface2);
+color: var(--muted);
+border: 1px solid var(--border);
+font-family: var(--mono);
+font-size: 13px;
+border-bottom-left-radius: 4px;
+}
+
+.msg-time {
+font-size: 10px;
+color: var(--muted);
+font-family: var(--mono);
+padding: 0 4px;
+}
+
+/* Typing indicator */
+.typing-dots {
+display: inline-flex;
+gap: 3px;
+align-items: center;
+padding: 2px 0;
+}
+
+.typing-dots span {
+width: 5px;
+height: 5px;
+border-radius: 50%;
+background: var(--muted);
+animation: typing 1.2s infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ── Quick Commands ──────────────────────────────── */
+.quick-row {
+flex-shrink: 0;
+padding: 8px 16px 4px;
+overflow-x: auto;
+display: flex;
+gap: 8px;
+-webkit-overflow-scrolling: touch;
+scrollbar-width: none;
+}
+
+.quick-row::-webkit-scrollbar { display: none; }
+
+.quick-chip {
+flex-shrink: 0;
+background: var(--surface2);
+border: 1px solid var(--border);
+border-radius: 20px;
+padding: 6px 14px;
+font-size: 12px;
+font-family: var(--mono);
+color: var(--muted);
+cursor: pointer;
+white-space: nowrap;
+transition: all 0.15s;
+}
+
+.quick-chip:active {
+background: var(--accent-dim);
+border-color: var(--accent);
+color: var(--accent);
+transform: scale(0.95);
+}
+
+/* ── Input Area ──────────────────────────────────── */
+.input-area {
+flex-shrink: 0;
+padding: 8px 16px;
+padding-bottom: calc(10px + var(--safe-bottom));
+background: var(--surface);
+border-top: 1px solid var(--border);
+display: flex;
+align-items: flex-end;
+gap: 10px;
+}
+
+.input-wrap {
+flex: 1;
+background: var(--surface2);
+border: 1.5px solid var(--border);
+border-radius: 22px;
+display: flex;
+align-items: flex-end;
+padding: 10px 16px;
+transition: border-color 0.2s;
+min-height: 44px;
+}
+
+.input-wrap:focus-within { border-color: var(--accent); }
+
+textarea {
+flex: 1;
+background: none;
+border: none;
+outline: none;
+color: var(--text);
+font-family: var(--sans);
+font-size: 15px;
+line-height: 1.4;
+resize: none;
+max-height: 100px;
+min-height: 22px;
+-webkit-appearance: none;
+}
+
+textarea::placeholder { color: var(--muted); }
+
+.send-btn {
+width: 44px;
+height: 44px;
+border-radius: 50%;
+background: var(--accent);
+border: none;
+color: #000;
+font-size: 18px;
+cursor: pointer;
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+transition: all 0.15s;
+}
+
+.send-btn:active { transform: scale(0.9); opacity: 0.8; }
+.send-btn:disabled { background: var(--border); color: var(--muted); }
+
+/* ── Desktop adjustments ─────────────────────────── */
+@media (min-width: 600px) {
+#app { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+header { padding: 14px 20px; }
+#messages { padding: 20px; gap: 14px; }
+.msg { max-width: 75%; }
+.input-area { padding: 12px 20px; }
+.msg-bubble { font-size: 14px; }
+.quick-row { padding: 8px 20px 4px; }
+}
+
+@media (min-width: 900px) {
+body { background: #080808; }
+#app { max-width: 680px; }
+}
 </style>
+
 </head>
 <body>
 
-<!-- Auth overlay -->
-<div class="auth-overlay" id="authOverlay">
-  <div class="auth-box">
-    <div class="auth-title">AGENT//UI</div>
-    <div class="auth-subtitle">Enter your access token to connect to the remote agent interface.</div>
-    <input type="password" class="auth-input" id="tokenInput" placeholder="access token" />
-    <div class="auth-error" id="authError"></div>
-    <button class="auth-btn" onclick="authenticate()">AUTHENTICATE →</button>
-  </div>
-</div>
+<!-- Auth -->
 
-<header>
-  <div class="logo">AGENT<span>//</span>UI</div>
-  <div style="display:flex;align-items:center;gap:16px;">
-    <div class="status-text">
-      <span class="status-dot" id="statusDot"></span>
-      <span id="statusText">disconnected</span>
+<div id="auth">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">t_</div>
+      <div class="auth-logo-text">ter<span>mi</span></div>
     </div>
-    <button class="connect-btn" id="resetBtn" onclick="resetAgent()" style="border-color:var(--muted);color:var(--muted)">RESET</button>
-    <button class="connect-btn" id="connectBtn" onclick="connect()">CONNECT</button>
-  </div>
-</header>
-
-<div class="tabs">
-  <button class="tab active" onclick="setMode('chat')" id="tab-chat">💬 Agent Chat</button>
-  <button class="tab" onclick="setMode('command')" id="tab-command">⚡ Run Command</button>
-</div>
-
-<div class="messages" id="messages">
-  <div class="message">
-    <div class="message-meta"><span class="message-label label-system">SYSTEM</span></div>
-    <div class="message-content thinking-msg">Connect to your Hetzner server to start. Click CONNECT above.</div>
+    <div class="auth-subtitle">Enter your access token to connect to the remote agent.</div>
+    <div class="auth-field">
+      <div class="auth-label">Access Token</div>
+      <input type="password" class="auth-input" id="tokenInput" placeholder="••••••••••••" autocomplete="current-password" />
+      <div class="auth-error" id="authError"></div>
+    </div>
+    <button class="auth-btn" onclick="authenticate()">Connect →</button>
   </div>
 </div>
 
-<div class="input-area">
-  <div class="quick-cmds" id="quickCmds">
-    <button class="quick-cmd" onclick="quickCmd('check server status')">server status</button>
-    <button class="quick-cmd" onclick="quickCmd('show running processes')">processes</button>
-    <button class="quick-cmd" onclick="quickCmd('show disk usage')">disk usage</button>
-    <button class="quick-cmd" onclick="quickCmd('show recent logs')">recent logs</button>
-    <button class="quick-cmd" onclick="quickCmd('deploy latest changes')">deploy</button>
+<!-- App -->
+
+<div id="app">
+  <header>
+    <div class="header-left">
+      <div class="logo-icon">t_</div>
+      <div class="logo-name">termi</div>
+    </div>
+    <div class="status-pill">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">offline</span>
+    </div>
+    <div class="header-right">
+      <button class="icon-btn reset" onclick="resetSession()" title="Reset session">↺</button>
+      <button class="icon-btn connect" id="connectBtn" onclick="connect()" title="Connect">⚡</button>
+    </div>
+  </header>
+
+  <div class="mode-bar">
+    <button class="mode-btn active" id="tab-chat" onclick="setMode('chat')">💬 chat</button>
+    <button class="mode-btn" id="tab-cmd" onclick="setMode('cmd')">⚡ shell</button>
   </div>
-  <div class="input-row">
-    <div class="input-wrapper">
-      <span class="prompt-prefix">›</span>
-      <textarea 
-        id="msgInput" 
-        placeholder="Message your agent or run a command..."
+
+  <div id="messages">
+    <div class="msg system">
+      <div class="msg-bubble">tap ⚡ to connect to your agent</div>
+    </div>
+  </div>
+
+  <div class="quick-row" id="quickRow">
+    <div class="quick-chip" onclick="quick('worker status')">worker status</div>
+    <div class="quick-chip" onclick="quick('server status')">server status</div>
+    <div class="quick-chip" onclick="quick('show running processes')">processes</div>
+    <div class="quick-chip" onclick="quick('disk usage')">disk usage</div>
+    <div class="quick-chip" onclick="quick('show recent logs')">logs</div>
+    <div class="quick-chip" onclick="quick('git status')">git status</div>
+    <div class="quick-chip" onclick="quick('deploy latest changes')">deploy</div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-wrap">
+      <textarea
+        id="input"
+        placeholder="Message your agent..."
         rows="1"
-        onkeydown="handleKey(event)"
-        oninput="autoResize(this)"
+        onkeydown="onKey(event)"
+        oninput="resize(this)"
       ></textarea>
     </div>
-    <button class="send-btn" id="sendBtn" onclick="send()">SEND ↵</button>
+    <button class="send-btn" id="sendBtn" onclick="send()" disabled>↑</button>
   </div>
-  <div class="mode-hint" id="modeHint">Mode: <span>Agent Chat</span> — messages go to Claude CLI via tmux</div>
 </div>
 
 <script>
   let socket = null;
-  let authToken = '';
+  let token = '';
   let mode = 'chat';
   let connected = false;
+  let thinkingEl = null;
 
+  // ── Auth ──────────────────────────────────────────
   function authenticate() {
-    const token = document.getElementById('tokenInput').value.trim();
-    if (!token) {
-      document.getElementById('authError').textContent = 'Token required';
-      return;
-    }
-    authToken = token;
-    localStorage.setItem('agentToken', token);
-    document.getElementById('authOverlay').style.display = 'none';
+    const t = document.getElementById('tokenInput').value.trim();
+    if (!t) { document.getElementById('authError').textContent = 'Token required'; return; }
+    token = t;
+    localStorage.setItem('termi_token', t);
+    document.getElementById('auth').style.display = 'none';
     initSocket();
   }
 
+  // ── Socket ────────────────────────────────────────
   function initSocket() {
-    socket = io({ auth: { token: authToken } });
+    socket = io({ auth: { token } });
 
-    socket.on('connect_error', (err) => {
-      document.getElementById('authOverlay').style.display = 'flex';
+    socket.on('connect_error', () => {
+      document.getElementById('auth').style.display = 'flex';
       document.getElementById('authError').textContent = 'Invalid token';
     });
 
     socket.on('status', ({ connected: c, message }) => {
       connected = c;
-      updateStatus(c ? 'connected' : 'error', message);
-      addMessage('system', message);
-      if (c) document.getElementById('connectBtn').textContent = 'CONNECTED';
+      setStatus(c ? 'on' : 'err', c ? 'online' : 'offline');
+      addMsg('system', message);
+      if (c) {
+        document.getElementById('sendBtn').disabled = false;
+        document.getElementById('connectBtn').textContent = '✓';
+      }
     });
-
-    let thinkingEl = null;
 
     socket.on('response', ({ type, content }) => {
       if (type === 'thinking') {
-        // Update existing thinking message in place instead of adding new ones
         if (thinkingEl) {
-          thinkingEl.querySelector('.message-content span').textContent = content;
+          // Update in place
+          thinkingEl.querySelector('.msg-bubble').textContent = content || '';
         } else {
-          thinkingEl = addMessage(type, content);
+          thinkingEl = addMsg('thinking', '');
+          thinkingEl.querySelector('.msg-bubble').innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
         }
       } else {
-        // Remove thinking message when real response arrives
-        if (thinkingEl) {
-          thinkingEl.remove();
-          thinkingEl = null;
-        }
-        addMessage(type, content);
+        if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
+        addMsg(type, content);
       }
     });
   }
 
-  function resetAgent() {
-    if (!socket) return;
-    socket.emit('reset');
-  }
-
   function connect() {
-    if (!socket) return;
-    if (connected) return;
-    updateStatus('connecting', 'connecting...');
+    if (!socket || connected) return;
     socket.emit('init');
   }
 
-  function setMode(m) {
-    mode = m;
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById(`tab-${m}`).classList.add('active');
-    const hint = document.getElementById('modeHint');
-    if (m === 'chat') {
-      hint.innerHTML = 'Mode: <span>Agent Chat</span> — messages go to Claude CLI via tmux';
-      document.getElementById('msgInput').placeholder = 'Message your agent...';
-    } else {
-      hint.innerHTML = 'Mode: <span>Command</span> — runs directly on server shell';
-      document.getElementById('msgInput').placeholder = 'ls -la, ps aux, cat file.log...';
-    }
+  function resetSession() {
+    if (!socket) return;
+    socket.emit('reset');
+    addMsg('system', 'Session reset — starting fresh');
   }
 
+  // ── Messages ──────────────────────────────────────
+  function addMsg(type, content) {
+    const wrap = document.getElementById('messages');
+    const div = document.createElement('div');
+    const typeMap = { you: 'you', agent: 'agent', cmd: 'cmd', command: 'cmd', error: 'error', system: 'system', thinking: 'thinking' };
+    div.className = `msg ${typeMap[type] || 'system'}`;
+
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    div.innerHTML = `
+      <div class="msg-bubble">${escHtml(content)}</div>
+      ${type !== 'system' ? `<div class="msg-time">${time}</div>` : ''}
+    `;
+    wrap.appendChild(div);
+    wrap.scrollTop = wrap.scrollHeight;
+    return div;
+  }
+
+  // ── Send ──────────────────────────────────────────
   function send() {
-    const input = document.getElementById('msgInput');
-    const msg = input.value.trim();
+    const el = document.getElementById('input');
+    const msg = el.value.trim();
     if (!msg || !connected) return;
+    addMsg('you', msg);
+    el.value = '';
+    resize(el);
 
-    addMessage('user', msg);
-    input.value = '';
-    autoResize(input);
-
-    if (mode === 'chat') {
-      socket.emit('chat', { message: msg });
-    } else {
-      socket.emit('command', { command: msg });
-    }
+    if (mode === 'chat') socket.emit('chat', { message: msg });
+    else socket.emit('command', { command: msg });
   }
 
-  function quickCmd(cmd) {
-    document.getElementById('msgInput').value = cmd;
+  function quick(cmd) {
+    document.getElementById('input').value = cmd;
     send();
   }
 
-  function handleKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  // ── Mode ──────────────────────────────────────────
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`tab-${m}`).classList.add('active');
+    const el = document.getElementById('input');
+    el.placeholder = m === 'chat' ? 'Message your agent...' : 'ls -la, ps aux, cat file...';
+  }
+
+  // ── Utils ─────────────────────────────────────────
+  function setStatus(state, text) {
+    const dot = document.getElementById('statusDot');
+    dot.className = 'status-dot' + (state === 'on' ? ' on' : state === 'err' ? ' err' : '');
+    document.getElementById('statusText').textContent = text;
+  }
+
+  function onKey(e) {
+    // Desktop: Enter sends, Shift+Enter newline
+    // Mobile: always newline on Enter (keyboard submit button handles send)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       send();
     }
   }
 
-  function autoResize(el) {
+  function resize(el) {
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
   }
 
-  function addMessage(type, content) {
-    const messages = document.getElementById('messages');
-    const div = document.createElement('div');
-    div.className = 'message';
-    div.dataset.type = type;
-
-    const labelMap = {
-      user: ['YOU', 'label-you'],
-      agent: ['AGENT', 'label-agent'],
-      command: ['CMD OUTPUT', 'label-cmd'],
-      error: ['ERROR', 'label-error'],
-      system: ['SYSTEM', 'label-system'],
-      thinking: ['THINKING', 'label-system'],
-    };
-
-    const [label, labelClass] = labelMap[type] || ['INFO', 'label-system'];
-    const time = new Date().toLocaleTimeString();
-
-    const contentClass = {
-      user: 'user-msg',
-      agent: 'agent-msg',
-      error: 'error-msg',
-      thinking: 'thinking-msg',
-    }[type] || '';
-
-    const thinkingClass = type === 'thinking' ? 'thinking-dots' : '';
-
-    div.innerHTML = `
-      <div class="message-meta">
-        <span class="message-label ${labelClass}">${label}</span>
-        <span>${time}</span>
-      </div>
-      <div class="message-content ${contentClass}">
-        <span class="${thinkingClass}">${escapeHtml(content)}</span>
-      </div>
-    `;
-
-    messages.appendChild(div);
-    messages.scrollTop = messages.scrollHeight;
-    return div;
+  function escHtml(t) {
+    return String(t)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/\n/g,'<br>');
   }
 
-  function updateStatus(state, text) {
-    const dot = document.getElementById('statusDot');
-    const statusText = document.getElementById('statusText');
-    dot.className = 'status-dot';
-    if (state === 'connected') dot.classList.add('connected');
-    if (state === 'error') dot.classList.add('error');
-    statusText.textContent = text || state;
-  }
-
-  function escapeHtml(text) {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  // Check saved token
-  window.onload = () => {
-    const saved = localStorage.getItem('agentToken');
+  // ── Init ──────────────────────────────────────────
+  window.addEventListener('load', () => {
+    const saved = localStorage.getItem('termi_token');
     if (saved) {
-      authToken = saved;
-      document.getElementById('authOverlay').style.display = 'none';
+      token = saved;
+      document.getElementById('auth').style.display = 'none';
       initSocket();
     }
-
-    // Enter key on auth
     document.getElementById('tokenInput').addEventListener('keydown', e => {
       if (e.key === 'Enter') authenticate();
     });
-  };
+    // Enable send button on input
+    document.getElementById('input').addEventListener('input', () => {
+      document.getElementById('sendBtn').disabled = !connected;
+    });
+  });
 </script>
+
 </body>
 </html>
