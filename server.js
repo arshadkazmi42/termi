@@ -4,15 +4,46 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const util = require('util');
+const os = require('os');
 
 const execAsync = util.promisify(exec);
+
+// ── Resolve agent binary path ─────────────────────────────
+// PM2 on macOS uses minimal PATH — agent binary may not be found
+// Add common install locations explicitly
+const EXTRA_PATHS = [
+  '/opt/homebrew/bin',           // macOS Apple Silicon brew
+  '/usr/local/bin',              // macOS Intel brew + Linux
+  '/usr/bin',
+  `${os.homedir()}/.local/bin`,  // user installs
+  `${os.homedir()}/.cursor/bin`, // cursor specific
+  `${os.homedir()}/.nvm/versions/node/*/bin`, // nvm
+].join(':');
+
+const AGENT_ENV = {
+  ...process.env,
+  PATH: `${EXTRA_PATHS}:${process.env.PATH || ''}`
+};
+
+// Find actual agent binary path on startup
+let AGENT_BIN = 'agent';
+try {
+  AGENT_BIN = require('child_process')
+    .execSync('which agent', { env: AGENT_ENV })
+    .toString()
+    .trim();
+  console.log(`[termi] agent binary: ${AGENT_BIN}`);
+} catch {
+  console.warn('[termi] agent not found in PATH — will retry on connection');
+}
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  // Increase timeouts for slow mobile connections
-  pingTimeout: 60000,
-  pingInterval: 25000,
+  pingTimeout: 300000,       // 5 min — handles long agent operations
+  pingInterval: 10000,       // ping every 10s to keep mobile alive
+  upgradeTimeout: 30000,
+  transports: ['websocket', 'polling'], // fallback to polling if websocket drops
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -23,22 +54,84 @@ const WORK_DIR = process.env.WORK_DIR || '/root/workspace';
 
 let hasSession = false;
 let agentRunning = false;
-
-// Store last response server-side so mobile can get it on reconnect
 let lastResponse = null;
 let pendingOutput = '';
 
+// ── Queue ─────────────────────────────────────────────
+let queue = [];
+
+function emitQueue() {
+  io.emit('queue', queue);
+}
+
+async function processQueue() {
+  if (agentRunning || queue.length === 0) return;
+
+  const next = queue.shift();
+  emitQueue();
+
+  agentRunning = true;
+  pendingOutput = '';
+  lastResponse = null;
+
+  io.emit('response', { type: 'thinking', content: `Running: ${next.message}` });
+
+  // Keepalive — emit heartbeat every 20s so mobile knows agent is still working
+  const keepalive = setInterval(() => {
+    if (agentRunning) {
+      io.emit('keepalive', { running: true });
+      console.log('[keepalive] agent still running, output length:', pendingOutput.length);
+    }
+  }, 20000);
+
+  try {
+    const output = await runAgent(next.message, (chunk) => {
+      io.emit('response', { type: 'thinking', content: chunk });
+    });
+
+    clearInterval(keepalive);
+    hasSession = true;
+    agentRunning = false;
+
+    lastResponse = { type: 'agent', content: output };
+    pendingOutput = '';
+
+    console.log('[agent] completed, emitting final response, length:', output.length);
+    io.emit('response', lastResponse);
+
+  } catch (err) {
+    clearInterval(keepalive);
+    agentRunning = false;
+    lastResponse = { type: 'error', content: err.message };
+    io.emit('response', lastResponse);
+  }
+
+  processQueue();
+}
+
+// ── Agent ─────────────────────────────────────────────
 function runAgent(message, onChunk) {
   return new Promise((resolve, reject) => {
     let output = '';
     let error = '';
+    let resolved = false;
+
+    function done() {
+      if (resolved) return;
+      resolved = true;
+      try { proc.kill(); } catch (_) {}
+      console.log('[agent] done, output length:', output.length);
+      if (output) resolve(output);
+      else if (error) resolve(`STDERR: ${error}`);
+      else resolve('Agent completed with no output.');
+    }
 
     const args = ['--print', '--trust', '--yolo'];
     if (hasSession) args.push('--continue');
 
-    const proc = spawn('agent', args, {
+    const proc = spawn(AGENT_BIN, args, {
       cwd: WORK_DIR,
-      env: { ...process.env },
+      env: AGENT_ENV,
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
@@ -49,7 +142,6 @@ function runAgent(message, onChunk) {
       const chunk = data.toString();
       output += chunk;
       pendingOutput = output;
-      // Send chunk to any connected socket
       onChunk(output);
     });
 
@@ -57,15 +149,19 @@ function runAgent(message, onChunk) {
       error += data.toString();
     });
 
-    proc.on('close', () => {
-      agentRunning = false;
-      if (output) resolve(output);
-      else if (error) resolve(`STDERR: ${error}`);
-      else resolve('Agent completed with no output.');
+    proc.on('close', (code) => {
+      console.log('[agent] process closed, code:', code);
+      done();
+    });
+
+    proc.on('exit', (code) => {
+      console.log('[agent] process exited, code:', code);
+      done();
     });
 
     proc.on('error', (err) => {
-      agentRunning = false;
+      if (resolved) return;
+      resolved = true;
       reject(err);
     });
   });
@@ -75,6 +171,7 @@ async function runCommand(command) {
   try {
     const { stdout, stderr } = await execAsync(command, {
       cwd: WORK_DIR,
+      env: AGENT_ENV,
       timeout: 30000
     });
     return stdout + (stderr ? `\nSTDERR: ${stderr}` : '');
@@ -83,6 +180,7 @@ async function runCommand(command) {
   }
 }
 
+// ── Socket ────────────────────────────────────────────
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
   if (token !== AUTH_TOKEN) return next(new Error('Unauthorized'));
@@ -90,21 +188,36 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  console.log('[socket] connected:', socket.id, 'transport:', socket.conn.transport.name);
 
   socket.on('init', async () => {
     try {
-      await execAsync('which agent');
+      // Re-resolve agent path in case it wasn't found on startup
+      if (AGENT_BIN === 'agent') {
+        try {
+          AGENT_BIN = require('child_process')
+            .execSync('which agent', { env: AGENT_ENV })
+            .toString().trim();
+          console.log(`[termi] agent resolved: ${AGENT_BIN}`);
+        } catch {
+          throw new Error('agent binary not found');
+        }
+      }
 
-      // If agent is currently running — send current output so mobile catches up
+      await execAsync(`${AGENT_BIN} --version`, { env: AGENT_ENV }).catch(() => {});
+
+      // Catch up if agent is still running
       if (agentRunning && pendingOutput) {
         socket.emit('response', { type: 'thinking', content: pendingOutput });
       }
 
-      // If we have a completed response the client may have missed — resend it
+      // Resend last response if client missed it
       if (lastResponse && !agentRunning) {
+        console.log('[init] resending lastResponse to', socket.id);
         socket.emit('response', lastResponse);
       }
+
+      socket.emit('queue', queue);
 
       socket.emit('status', {
         connected: true,
@@ -122,39 +235,33 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('chat', async ({ message }) => {
-    if (agentRunning) {
-      socket.emit('response', { type: 'error', content: 'Agent is busy. Wait for current task to finish.' });
-      return;
+  socket.on('chat', ({ message }) => {
+    const item = { id: Date.now(), message };
+    queue.push(item);
+    emitQueue();
+    processQueue();
+  });
+
+  socket.on('queue:remove', ({ id }) => {
+    queue = queue.filter(i => i.id !== id);
+    emitQueue();
+  });
+
+  socket.on('queue:move', ({ id, direction }) => {
+    const idx = queue.findIndex(i => i.id === id);
+    if (idx === -1) return;
+    if (direction === 'up' && idx > 0) {
+      [queue[idx - 1], queue[idx]] = [queue[idx], queue[idx - 1]];
     }
-
-    try {
-      agentRunning = true;
-      pendingOutput = '';
-      lastResponse = null;
-
-      socket.emit('response', { type: 'thinking', content: 'Agent is thinking...' });
-
-      const output = await runAgent(message, (chunk) => {
-        // Broadcast to ALL connected sockets so any reconnected mobile gets it
-        io.emit('response', { type: 'thinking', content: chunk });
-      });
-
-      hasSession = true;
-
-      // Store final response server-side
-      lastResponse = { type: 'agent', content: output };
-      pendingOutput = '';
-
-      // Broadcast final response to everyone
-      io.emit('response', lastResponse);
-
-    } catch (err) {
-      agentRunning = false;
-      const errResponse = { type: 'error', content: err.message };
-      lastResponse = errResponse;
-      io.emit('response', errResponse);
+    if (direction === 'down' && idx < queue.length - 1) {
+      [queue[idx], queue[idx + 1]] = [queue[idx + 1], queue[idx]];
     }
+    emitQueue();
+  });
+
+  socket.on('queue:clear', () => {
+    queue = [];
+    emitQueue();
   });
 
   socket.on('reset', () => {
@@ -165,6 +272,8 @@ io.on('connection', (socket) => {
     hasSession = false;
     lastResponse = null;
     pendingOutput = '';
+    queue = [];
+    emitQueue();
     socket.emit('response', { type: 'system', content: 'Session reset — starting fresh.' });
   });
 
@@ -180,8 +289,8 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id, '— agent still running:', agentRunning);
+  socket.on('disconnect', (reason) => {
+    console.log('[socket] disconnected:', socket.id, 'reason:', reason, 'agent running:', agentRunning);
   });
 });
 
