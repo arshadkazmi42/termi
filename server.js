@@ -9,15 +9,13 @@ const os = require('os');
 const execAsync = util.promisify(exec);
 
 // ── Resolve agent binary path ─────────────────────────────
-// PM2 on macOS uses minimal PATH — agent binary may not be found
-// Add common install locations explicitly
 const EXTRA_PATHS = [
+  '/Users/arshad/.local/bin',    // confirmed agent location
   '/opt/homebrew/bin',           // macOS Apple Silicon brew
   '/usr/local/bin',              // macOS Intel brew + Linux
   '/usr/bin',
-  `${os.homedir()}/.local/bin`,  // user installs
-  `${os.homedir()}/.cursor/bin`, // cursor specific
-  `${os.homedir()}/.nvm/versions/node/*/bin`, // nvm
+  `${os.homedir()}/.local/bin`,
+  `${os.homedir()}/.cursor/bin`,
 ].join(':');
 
 const AGENT_ENV = {
@@ -25,17 +23,8 @@ const AGENT_ENV = {
   PATH: `${EXTRA_PATHS}:${process.env.PATH || ''}`
 };
 
-// Find actual agent binary path on startup
-let AGENT_BIN = 'agent';
-try {
-  AGENT_BIN = require('child_process')
-    .execSync('which agent', { env: AGENT_ENV })
-    .toString()
-    .trim();
-  console.log(`[termi] agent binary: ${AGENT_BIN}`);
-} catch {
-  console.warn('[termi] agent not found in PATH — will retry on connection');
-}
+let AGENT_BIN = process.env.AGENT_BIN || `${os.homedir()}/.local/bin/agent`;
+console.log(`[termi] using agent binary: ${AGENT_BIN}`);
 
 const app = express();
 const server = http.createServer(app);
@@ -192,19 +181,11 @@ io.on('connection', (socket) => {
 
   socket.on('init', async () => {
     try {
-      // Re-resolve agent path in case it wasn't found on startup
-      if (AGENT_BIN === 'agent') {
-        try {
-          AGENT_BIN = require('child_process')
-            .execSync('which agent', { env: AGENT_ENV })
-            .toString().trim();
-          console.log(`[termi] agent resolved: ${AGENT_BIN}`);
-        } catch {
-          throw new Error('agent binary not found');
-        }
+      // Verify agent binary exists
+      const fs = require('fs');
+      if (!fs.existsSync(AGENT_BIN)) {
+        throw new Error(`agent binary not found at ${AGENT_BIN}`);
       }
-
-      await execAsync(`${AGENT_BIN} --version`, { env: AGENT_ENV }).catch(() => {});
 
       // Catch up if agent is still running
       if (agentRunning && pendingOutput) {

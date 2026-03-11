@@ -230,11 +230,32 @@ info "Installing npm dependencies..."
 cd "$INSTALL_DIR" && npm install --silent
 ok "Dependencies installed"
 
+# ── Find agent binary ─────────────────────────────────────
+info "Locating agent binary..."
+AGENT_BIN=$(which agent 2>/dev/null || echo "")
+if [ -z "$AGENT_BIN" ]; then
+  # Check common locations
+  for loc in "$HOME/.local/bin/agent" "/usr/local/bin/agent" "/opt/homebrew/bin/agent" "$HOME/.cursor/bin/agent"; do
+    if [ -f "$loc" ]; then
+      AGENT_BIN="$loc"
+      break
+    fi
+  done
+fi
+
+if [ -z "$AGENT_BIN" ]; then
+  warn "agent binary not found. Make sure Cursor CLI is installed and 'agent' is in your PATH"
+  AGENT_BIN="agent"
+else
+  ok "Found agent at: $AGENT_BIN"
+fi
+
 # ── Write .env ────────────────────────────────────────────
 cat > "$INSTALL_DIR/.env" << ENV
 WORK_DIR=$WORK_DIR
 AUTH_TOKEN=$AUTH_TOKEN
 PORT=$PORT
+AGENT_BIN=$AGENT_BIN
 ENV
 ok "Config written to $INSTALL_DIR/.env"
 
