@@ -30,8 +30,13 @@ echo ""
 OS=""
 ARCH=$(uname -m)
 PKG_MANAGER=""
+IS_MACOS=false
 
-if [ -f /etc/os-release ]; then
+# Detect macOS
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  IS_MACOS=true
+  OS="macos"
+elif [ -f /etc/os-release ]; then
   . /etc/os-release
   OS=$ID
 fi
@@ -39,6 +44,7 @@ fi
 case "$ARCH" in
   x86_64)  ARCH_LABEL="amd64" ;;
   aarch64) ARCH_LABEL="arm64" ;;
+  arm64)   ARCH_LABEL="arm64" ;;  # macOS M1/M2/M3
   armv7l)  ARCH_LABEL="armv7" ;;
   *)       ARCH_LABEL=$ARCH ;;
 esac
@@ -46,7 +52,19 @@ esac
 info "Detected OS: ${OS} | Arch: ${ARCH} (${ARCH_LABEL})"
 
 # Detect package manager
-if command -v apt-get &>/dev/null; then
+if $IS_MACOS; then
+  if command -v brew &>/dev/null; then
+    PKG_MANAGER="brew"
+  else
+    warn "Homebrew not found. Installing Homebrew..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Add brew to PATH for Apple Silicon
+    if [ -f /opt/homebrew/bin/brew ]; then
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    fi
+    PKG_MANAGER="brew"
+  fi
+elif command -v apt-get &>/dev/null; then
   PKG_MANAGER="apt"
 elif command -v yum &>/dev/null; then
   PKG_MANAGER="yum"
@@ -54,8 +72,6 @@ elif command -v dnf &>/dev/null; then
   PKG_MANAGER="dnf"
 elif command -v pacman &>/dev/null; then
   PKG_MANAGER="pacman"
-elif command -v brew &>/dev/null; then
-  PKG_MANAGER="brew"
 else
   warn "No known package manager found. Manual install may be needed."
   PKG_MANAGER="unknown"
@@ -66,13 +82,23 @@ ok "Package manager: ${PKG_MANAGER}"
 # ── Config ────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}Configuration${NC}"
-read -p "Work directory for agent [/root/workspace]: " WORK_DIR
-WORK_DIR=${WORK_DIR:-/root/workspace}
+
+# Default workdir differs on macOS vs Linux
+if $IS_MACOS; then
+  DEFAULT_WORK_DIR="$HOME/workspace"
+else
+  DEFAULT_WORK_DIR="/root/workspace"
+fi
+
+read -p "Work directory for agent [${DEFAULT_WORK_DIR}]: " WORK_DIR
+WORK_DIR=${WORK_DIR:-$DEFAULT_WORK_DIR}
+
 read -p "Auth token to protect the UI: " AUTH_TOKEN
 if [ -z "$AUTH_TOKEN" ]; then
-  AUTH_TOKEN=$(openssl rand -hex 16 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "changeme123")
+  AUTH_TOKEN=$(openssl rand -hex 16 2>/dev/null || echo "changeme123")
   warn "No token entered — generated: ${AUTH_TOKEN}"
 fi
+
 read -p "Port [3619]: " PORT
 PORT=${PORT:-3619}
 
@@ -94,6 +120,17 @@ fi
 if ! command -v node &>/dev/null; then
   info "Installing Node.js..."
   case $PKG_MANAGER in
+    brew)
+      brew install node@20
+      # Link if not already linked
+      brew link node@20 2>/dev/null || true
+      # Add to PATH for current session
+      if [ -f /opt/homebrew/bin/node ]; then
+        export PATH="/opt/homebrew/bin:$PATH"
+      elif [ -f /usr/local/bin/node ]; then
+        export PATH="/usr/local/bin:$PATH"
+      fi
+      ;;
     apt)
       curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
       apt-get install -y nodejs
@@ -105,11 +142,8 @@ if ! command -v node &>/dev/null; then
     pacman)
       pacman -Sy --noconfirm nodejs npm
       ;;
-    brew)
-      brew install node
-      ;;
     *)
-      # Fallback — download binary directly
+      # Fallback — download binary directly (Linux only)
       NODE_VERSION="20.11.0"
       NODE_ARCH=$ARCH_LABEL
       [ "$ARCH" = "x86_64" ] && NODE_ARCH="x64"
@@ -134,14 +168,32 @@ fi
 
 # ── Install cloudflared (optional) ───────────────────────
 install_cloudflared() {
-  info "Installing cloudflared for ${ARCH_LABEL}..."
-  CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_LABEL}"
-  
-  # arm fallback
-  [ "$ARCH_LABEL" = "armv7" ] && CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm"
+  info "Installing cloudflared..."
 
-  curl -fsSL "$CF_URL" -o /usr/local/bin/cloudflared
-  chmod +x /usr/local/bin/cloudflared
+  if $IS_MACOS; then
+    # macOS — use brew
+    if command -v brew &>/dev/null; then
+      brew install cloudflare/cloudflare/cloudflared
+    else
+      # Direct download for macOS
+      if [ "$ARCH_LABEL" = "arm64" ]; then
+        CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz"
+      else
+        CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64.tgz"
+      fi
+      curl -fsSL "$CF_URL" -o /tmp/cloudflared.tgz
+      tar -xzf /tmp/cloudflared.tgz -C /usr/local/bin/
+      chmod +x /usr/local/bin/cloudflared
+      rm /tmp/cloudflared.tgz
+    fi
+  else
+    # Linux
+    CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_LABEL}"
+    [ "$ARCH_LABEL" = "armv7" ] && CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm"
+    curl -fsSL "$CF_URL" -o /usr/local/bin/cloudflared
+    chmod +x /usr/local/bin/cloudflared
+  fi
+
   ok "cloudflared installed"
 }
 
@@ -157,39 +209,62 @@ fi
 
 # ── Deploy files ──────────────────────────────────────────
 info "Deploying files..."
-mkdir -p /opt/agent-ui/public
+
+# macOS uses /usr/local/opt, Linux uses /opt
+if $IS_MACOS; then
+  INSTALL_DIR="$HOME/.termi"
+else
+  INSTALL_DIR="/opt/agent-ui"
+fi
+
+mkdir -p "$INSTALL_DIR/public"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cp "$SCRIPT_DIR/server.js" /opt/agent-ui/
-cp "$SCRIPT_DIR/package.json" /opt/agent-ui/
-cp "$SCRIPT_DIR/public/index.html" /opt/agent-ui/public/
-ok "Files copied to /opt/agent-ui"
+cp "$SCRIPT_DIR/server.js" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/package.json" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/public/index.html" "$INSTALL_DIR/public/"
+ok "Files copied to $INSTALL_DIR"
 
 # ── Install npm dependencies ──────────────────────────────
 info "Installing npm dependencies..."
-cd /opt/agent-ui && npm install --silent
+cd "$INSTALL_DIR" && npm install --silent
 ok "Dependencies installed"
 
 # ── Write .env ────────────────────────────────────────────
-cat > /opt/agent-ui/.env << ENV
+cat > "$INSTALL_DIR/.env" << ENV
 WORK_DIR=$WORK_DIR
 AUTH_TOKEN=$AUTH_TOKEN
 PORT=$PORT
 ENV
-ok "Config written to /opt/agent-ui/.env"
+ok "Config written to $INSTALL_DIR/.env"
 
 # ── Start with PM2 ───────────────────────────────────────
 info "Starting Agent UI with PM2..."
-cd /opt/agent-ui
+cd "$INSTALL_DIR"
 pm2 delete agent-ui 2>/dev/null || true
 WORK_DIR=$WORK_DIR AUTH_TOKEN=$AUTH_TOKEN PORT=$PORT \
   pm2 start server.js --name agent-ui --update-env
 pm2 save
-pm2 startup 2>/dev/null || true
+
+# PM2 startup differs on macOS vs Linux
+if $IS_MACOS; then
+  # macOS uses launchd
+  pm2 startup launchd 2>/dev/null || pm2 startup 2>/dev/null || true
+else
+  pm2 startup 2>/dev/null || true
+fi
+
 ok "Agent UI started"
 
+# ── Get public URL ────────────────────────────────────────
+if $IS_MACOS; then
+  LOCAL_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "localhost")
+else
+  LOCAL_IP=$(curl -s ifconfig.me 2>/dev/null || echo "YOUR-IP")
+fi
+PUBLIC_URL="http://${LOCAL_IP}:${PORT}"
+
 # ── Start cloudflare tunnel if installed ──────────────────
-PUBLIC_URL="http://$(curl -s ifconfig.me 2>/dev/null || echo 'YOUR-IP'):${PORT}"
 if command -v cloudflared &>/dev/null; then
   info "Starting Cloudflare tunnel..."
   pm2 delete termi-tunnel 2>/dev/null || true
@@ -205,16 +280,22 @@ echo -e "${BOLD}╔════════════════════�
 echo -e "${BOLD}║           SETUP DONE ✓                 ║${NC}"
 echo -e "${BOLD}╚════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "  ${CYAN}Local URL:${NC}   $PUBLIC_URL"
-echo -e "  ${CYAN}Token:${NC}       $AUTH_TOKEN"
-echo -e "  ${CYAN}Workdir:${NC}     $WORK_DIR"
-echo -e "  ${CYAN}Session:${NC}     $SCREEN_SESSION"
+echo -e "  ${CYAN}Local URL:${NC}    $PUBLIC_URL"
+echo -e "  ${CYAN}Token:${NC}        $AUTH_TOKEN"
+echo -e "  ${CYAN}Workdir:${NC}      $WORK_DIR"
+echo -e "  ${CYAN}Install dir:${NC}  $INSTALL_DIR"
 echo ""
-echo -e "  ${YELLOW}Start your agent session:${NC}"
-echo -e "  screen -S $SCREEN_SESSION"
-echo -e "  agent --yolo   (inside screen)"
-echo -e "  Ctrl+A D       (detach)"
+if $IS_MACOS; then
+echo -e "  ${YELLOW}macOS notes:${NC}"
+echo -e "  • Open http://localhost:${PORT} in browser"
+echo -e "  • Use cloudflare tunnel URL for mobile access"
+fi
 echo ""
 echo -e "  ${YELLOW}View cloudflare URL:${NC}"
 echo -e "  pm2 logs termi-tunnel"
+echo ""
+echo -e "  ${YELLOW}Manage:${NC}"
+echo -e "  pm2 status          — check running processes"
+echo -e "  pm2 logs agent-ui   — view server logs"
+echo -e "  pm2 restart agent-ui — restart server"
 echo ""
