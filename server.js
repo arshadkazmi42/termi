@@ -40,9 +40,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 const AUTH_TOKEN = process.env.AUTH_TOKEN || 'changeme';
 const PORT = process.env.PORT || 3619;
 const WORK_DIR = process.env.WORK_DIR || '/root/workspace';
+const CLAUDE_USER = process.env.CLAUDE_USER || 'termi';
 
 let hasSession = false;
 let agentRunning = false;
+<<<<<<< Updated upstream
 let lastResponse = null;
 let pendingOutput = '';
 
@@ -100,6 +102,15 @@ async function processQueue() {
 
 // ── Agent ─────────────────────────────────────────────
 function runAgent(message, onChunk) {
+=======
+let agentType = process.env.AGENT_TYPE || 'agent'; // 'agent' or 'claude'
+
+// Store last response server-side so mobile can get it on reconnect
+let lastResponse = null;
+let pendingOutput = '';
+
+function spawnRunner(message, onChunk, bin, args) {
+>>>>>>> Stashed changes
   return new Promise((resolve, reject) => {
     let output = '';
     let error = '';
@@ -115,17 +126,25 @@ function runAgent(message, onChunk) {
       else resolve('Agent completed with no output.');
     }
 
+<<<<<<< Updated upstream
     const args = ['--print', '--trust', '--yolo'];
     if (hasSession) args.push('--continue');
 
     const proc = spawn(AGENT_BIN, args, {
+=======
+    const proc = spawn(bin, args, {
+>>>>>>> Stashed changes
       cwd: WORK_DIR,
       env: AGENT_ENV,
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
-    proc.stdin.write(message + '\n');
-    proc.stdin.end();
+    if (bin === 'agent') {
+      proc.stdin.write(message + '\n');
+      proc.stdin.end();
+    } else {
+      proc.stdin.end(); // claude gets message via args
+    }
 
     proc.stdout.on('data', (data) => {
       const chunk = data.toString();
@@ -156,6 +175,75 @@ function runAgent(message, onChunk) {
   });
 }
 
+function runAgent(message, onChunk) {
+  const args = ['--print', '--trust', '--yolo'];
+  if (hasSession) args.push('--continue');
+  return spawnRunner(message, onChunk, 'agent', args);
+}
+
+function getClaudeUid() {
+  try {
+    const uid = parseInt(require('child_process').execSync(`id -u ${CLAUDE_USER}`).toString().trim(), 10);
+    const gid = parseInt(require('child_process').execSync(`id -g ${CLAUDE_USER}`).toString().trim(), 10);
+    return { uid, gid, home: `/home/${CLAUDE_USER}` };
+  } catch {
+    return null;
+  }
+}
+
+function runClaudeCode(message, onChunk) {
+  return new Promise((resolve, reject) => {
+    let output = '';
+    let error = '';
+
+    const userInfo = getClaudeUid();
+    const args = ['--print', '--dangerously-skip-permissions'];
+    if (hasSession) args.push('--continue');
+    args.push(message);
+
+    const spawnOpts = {
+      cwd: WORK_DIR,
+      env: {
+        ...process.env,
+        HOME: userInfo ? userInfo.home : process.env.HOME,
+        USER: CLAUDE_USER,
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      ...(userInfo ? { uid: userInfo.uid, gid: userInfo.gid } : {}),
+    };
+
+    const proc = spawn('claude', args, spawnOpts);
+    proc.stdin.end();
+
+    proc.stdout.on('data', (data) => {
+      const chunk = data.toString();
+      output += chunk;
+      pendingOutput = output;
+      onChunk(output);
+    });
+
+    proc.stderr.on('data', (data) => {
+      error += data.toString();
+    });
+
+    proc.on('close', () => {
+      agentRunning = false;
+      if (output) resolve(output);
+      else if (error) resolve(`STDERR: ${error}`);
+      else resolve('Claude completed with no output.');
+    });
+
+    proc.on('error', (err) => {
+      agentRunning = false;
+      reject(err);
+    });
+  });
+}
+
+function runActive(message, onChunk) {
+  return agentType === 'claude' ? runClaudeCode(message, onChunk) : runAgent(message, onChunk);
+}
+
 async function runCommand(command) {
   try {
     const { stdout, stderr } = await execAsync(command, {
@@ -180,6 +268,7 @@ io.on('connection', (socket) => {
   console.log('[socket] connected:', socket.id, 'transport:', socket.conn.transport.name);
 
   socket.on('init', async () => {
+<<<<<<< Updated upstream
     try {
       // Verify agent binary exists
       const fs = require('fs');
@@ -213,7 +302,58 @@ io.on('connection', (socket) => {
         connected: false,
         message: 'agent not found in PATH.'
       });
+=======
+    // Check availability of both CLIs
+    const [agentAvail, claudeAvail] = await Promise.all([
+      execAsync('which agent').then(() => true).catch(() => false),
+      execAsync('which claude').then(() => true).catch(() => false),
+    ]);
+
+    if (!agentAvail && !claudeAvail) {
+      socket.emit('status', { connected: false, message: 'No agent CLI found in PATH.' });
+      return;
+>>>>>>> Stashed changes
     }
+
+    // If current agentType isn't available, fall back to what is
+    if (agentType === 'agent' && !agentAvail && claudeAvail) agentType = 'claude';
+    if (agentType === 'claude' && !claudeAvail && agentAvail) agentType = 'agent';
+
+    // If agent is currently running — send current output so mobile catches up
+    if (agentRunning && pendingOutput) {
+      socket.emit('response', { type: 'thinking', content: pendingOutput });
+    }
+
+    // If we have a completed response the client may have missed — resend it
+    if (lastResponse && !agentRunning) {
+      socket.emit('response', lastResponse);
+    }
+
+    socket.emit('status', {
+      connected: true,
+      agentType,
+      agentAvail,
+      claudeAvail,
+      message: agentRunning
+        ? 'Agent is busy — reconnected, catching up...'
+        : hasSession
+          ? 'Reconnected — session context intact'
+          : `Ready — ${WORK_DIR}`
+    });
+  });
+
+  socket.on('setAgent', ({ type }) => {
+    if (!['agent', 'claude'].includes(type)) return;
+    if (agentRunning) {
+      socket.emit('response', { type: 'error', content: 'Cannot switch agents while one is running.' });
+      return;
+    }
+    agentType = type;
+    hasSession = false;
+    lastResponse = null;
+    pendingOutput = '';
+    socket.emit('agentSwitched', { agentType });
+    socket.emit('response', { type: 'system', content: `Switched to ${type === 'claude' ? 'Claude Code' : 'Cursor Agent'} — session reset.` });
   });
 
   socket.on('chat', ({ message }) => {
@@ -234,8 +374,38 @@ io.on('connection', (socket) => {
     if (direction === 'up' && idx > 0) {
       [queue[idx - 1], queue[idx]] = [queue[idx], queue[idx - 1]];
     }
+<<<<<<< Updated upstream
     if (direction === 'down' && idx < queue.length - 1) {
       [queue[idx], queue[idx + 1]] = [queue[idx + 1], queue[idx]];
+=======
+
+    try {
+      agentRunning = true;
+      pendingOutput = '';
+      lastResponse = null;
+
+      socket.emit('response', { type: 'thinking', content: 'Agent is thinking...' });
+
+      const output = await runActive(message, (chunk) => {
+        // Broadcast to ALL connected sockets so any reconnected mobile gets it
+        io.emit('response', { type: 'thinking', content: chunk });
+      });
+
+      hasSession = true;
+
+      // Store final response server-side
+      lastResponse = { type: 'agent', content: output };
+      pendingOutput = '';
+
+      // Broadcast final response to everyone
+      io.emit('response', lastResponse);
+
+    } catch (err) {
+      agentRunning = false;
+      const errResponse = { type: 'error', content: err.message };
+      lastResponse = errResponse;
+      io.emit('response', errResponse);
+>>>>>>> Stashed changes
     }
     emitQueue();
   });

@@ -294,6 +294,43 @@ color: var(--accent);
 border-bottom-color: var(--accent);
 }
 
+/* ── Agent Toggle ────────────────────────────────── */
+.agent-toggle {
+margin-left: auto;
+display: flex;
+align-items: center;
+background: var(--surface2);
+border: 1px solid var(--border);
+border-radius: 20px;
+padding: 2px;
+gap: 2px;
+align-self: center;
+}
+
+.agent-opt {
+padding: 4px 10px;
+font-size: 11px;
+font-family: var(--mono);
+color: var(--muted);
+background: none;
+border: none;
+border-radius: 16px;
+cursor: pointer;
+transition: all 0.15s;
+white-space: nowrap;
+}
+
+.agent-opt.active {
+background: var(--accent);
+color: #000;
+font-weight: 600;
+}
+
+.agent-opt:disabled {
+opacity: 0.3;
+cursor: not-allowed;
+}
+
 /* ── Messages ────────────────────────────────────── */
 #messages {
 flex: 1;
@@ -575,6 +612,10 @@ body { background: #080808; }
   <div class="mode-bar">
     <button class="mode-btn active" id="tab-chat" onclick="setMode('chat')">💬 chat</button>
     <button class="mode-btn" id="tab-cmd" onclick="setMode('cmd')">⚡ shell</button>
+    <div class="agent-toggle" id="agentToggle">
+      <button class="agent-opt active" id="opt-agent" onclick="switchAgent('agent')" title="Cursor Agent">cursor</button>
+      <button class="agent-opt" id="opt-claude" onclick="switchAgent('claude')" title="Claude Code">claude</button>
+    </div>
   </div>
 
   <div id="messages">
@@ -613,6 +654,7 @@ body { background: #080808; }
   let mode = 'chat';
   let connected = false;
   let thinkingEl = null;
+  let activeAgent = 'agent'; // 'agent' | 'claude'
 
   // ── Auth ──────────────────────────────────────────
   function authenticate() {
@@ -633,14 +675,23 @@ body { background: #080808; }
       document.getElementById('authError').textContent = 'Invalid token';
     });
 
-    socket.on('status', ({ connected: c, message }) => {
+    socket.on('status', ({ connected: c, message, agentType, agentAvail, claudeAvail }) => {
       connected = c;
       setStatus(c ? 'on' : 'err', c ? 'online' : 'offline');
       addMsg('system', message);
       if (c) {
         document.getElementById('sendBtn').disabled = false;
         document.getElementById('connectBtn').textContent = '✓';
+        if (agentType) setAgentUI(agentType);
+        // Disable unavailable options
+        if (agentAvail === false) document.getElementById('opt-agent').disabled = true;
+        if (claudeAvail === false) document.getElementById('opt-claude').disabled = true;
       }
+    });
+
+    socket.on('agentSwitched', ({ agentType }) => {
+      activeAgent = agentType;
+      setAgentUI(agentType);
     });
 
     socket.on('response', ({ type, content }) => {
@@ -712,6 +763,18 @@ body { background: #080808; }
     document.getElementById(`tab-${m}`).classList.add('active');
     const el = document.getElementById('input');
     el.placeholder = m === 'chat' ? 'Message your agent...' : 'ls -la, ps aux, cat file...';
+  }
+
+  // ── Agent switcher ────────────────────────────────
+  function switchAgent(type) {
+    if (!socket || !connected || type === activeAgent) return;
+    socket.emit('setAgent', { type });
+  }
+
+  function setAgentUI(type) {
+    activeAgent = type;
+    document.querySelectorAll('.agent-opt').forEach(b => b.classList.remove('active'));
+    document.getElementById(`opt-${type}`).classList.add('active');
   }
 
   // ── Utils ─────────────────────────────────────────
