@@ -230,7 +230,6 @@ info "Installing npm dependencies..."
 cd "$INSTALL_DIR" && npm install --silent
 ok "Dependencies installed"
 
-<<<<<<< Updated upstream
 # ── Find agent binary ─────────────────────────────────────
 info "Locating agent binary..."
 AGENT_BIN=$(which agent 2>/dev/null || echo "")
@@ -249,7 +248,8 @@ if [ -z "$AGENT_BIN" ]; then
   AGENT_BIN="agent"
 else
   ok "Found agent at: $AGENT_BIN"
-=======
+fi
+
 # ── Setup Claude Code non-root user ──────────────────────
 CLAUDE_USER="termi"
 
@@ -305,7 +305,6 @@ if command -v claude &>/dev/null || find /root/.local/bin -name claude &>/dev/nu
   setup_claude_user
 else
   warn "claude CLI not found — skipping Claude Code setup (install it later and re-run deploy.sh)"
->>>>>>> Stashed changes
 fi
 
 # ── Write .env ────────────────────────────────────────────
@@ -313,11 +312,8 @@ cat > "$INSTALL_DIR/.env" << ENV
 WORK_DIR=$WORK_DIR
 AUTH_TOKEN=$AUTH_TOKEN
 PORT=$PORT
-<<<<<<< Updated upstream
 AGENT_BIN=$AGENT_BIN
-=======
 CLAUDE_USER=$CLAUDE_USER
->>>>>>> Stashed changes
 ENV
 ok "Config written to $INSTALL_DIR/.env"
 
@@ -363,34 +359,26 @@ echo -e "${BOLD}╔════════════════════�
 echo -e "${BOLD}║           SETUP DONE ✓                 ║${NC}"
 echo -e "${BOLD}╚════════════════════════════════════════╝${NC}"
 echo ""
-<<<<<<< Updated upstream
 echo -e "  ${CYAN}Local URL:${NC}    $PUBLIC_URL"
 echo -e "  ${CYAN}Token:${NC}        $AUTH_TOKEN"
 echo -e "  ${CYAN}Workdir:${NC}      $WORK_DIR"
 echo -e "  ${CYAN}Install dir:${NC}  $INSTALL_DIR"
+echo -e "  ${CYAN}Claude user:${NC}  $CLAUDE_USER"
 echo ""
 if $IS_MACOS; then
 echo -e "  ${YELLOW}macOS notes:${NC}"
 echo -e "  • Open http://localhost:${PORT} in browser"
 echo -e "  • Use cloudflare tunnel URL for mobile access"
 fi
-=======
-echo -e "  ${CYAN}Local URL:${NC}   $PUBLIC_URL"
-echo -e "  ${CYAN}Token:${NC}       $AUTH_TOKEN"
-echo -e "  ${CYAN}Workdir:${NC}     $WORK_DIR"
-echo -e "  ${CYAN}Claude user:${NC} $CLAUDE_USER"
->>>>>>> Stashed changes
 echo ""
 echo -e "  ${YELLOW}View cloudflare URL:${NC}"
 echo -e "  pm2 logs termi-tunnel"
 echo ""
-<<<<<<< Updated upstream
 echo -e "  ${YELLOW}Manage:${NC}"
 echo -e "  pm2 status          — check running processes"
 echo -e "  pm2 logs agent-ui   — view server logs"
 echo -e "  pm2 restart agent-ui — restart server"
-=======
+echo ""
 echo -e "  ${YELLOW}Re-sync claude auth (if you re-login):${NC}"
 echo -e "  cp -r ~/.claude /home/${CLAUDE_USER}/.claude && chown -R ${CLAUDE_USER}:${CLAUDE_USER} /home/${CLAUDE_USER}/.claude"
->>>>>>> Stashed changes
 echo ""

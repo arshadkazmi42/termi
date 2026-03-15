@@ -44,7 +44,9 @@ const CLAUDE_USER = process.env.CLAUDE_USER || 'termi';
 
 let hasSession = false;
 let agentRunning = false;
-<<<<<<< Updated upstream
+let agentType = process.env.AGENT_TYPE || 'agent'; // 'agent' or 'claude'
+
+// Store last response server-side so mobile can get it on reconnect
 let lastResponse = null;
 let pendingOutput = '';
 
@@ -76,7 +78,7 @@ async function processQueue() {
   }, 20000);
 
   try {
-    const output = await runAgent(next.message, (chunk) => {
+    const output = await runActive(next.message, (chunk) => {
       io.emit('response', { type: 'thinking', content: chunk });
     });
 
@@ -101,16 +103,7 @@ async function processQueue() {
 }
 
 // ── Agent ─────────────────────────────────────────────
-function runAgent(message, onChunk) {
-=======
-let agentType = process.env.AGENT_TYPE || 'agent'; // 'agent' or 'claude'
-
-// Store last response server-side so mobile can get it on reconnect
-let lastResponse = null;
-let pendingOutput = '';
-
 function spawnRunner(message, onChunk, bin, args) {
->>>>>>> Stashed changes
   return new Promise((resolve, reject) => {
     let output = '';
     let error = '';
@@ -126,14 +119,7 @@ function spawnRunner(message, onChunk, bin, args) {
       else resolve('Agent completed with no output.');
     }
 
-<<<<<<< Updated upstream
-    const args = ['--print', '--trust', '--yolo'];
-    if (hasSession) args.push('--continue');
-
-    const proc = spawn(AGENT_BIN, args, {
-=======
     const proc = spawn(bin, args, {
->>>>>>> Stashed changes
       cwd: WORK_DIR,
       env: AGENT_ENV,
       stdio: ['pipe', 'pipe', 'pipe']
@@ -268,41 +254,6 @@ io.on('connection', (socket) => {
   console.log('[socket] connected:', socket.id, 'transport:', socket.conn.transport.name);
 
   socket.on('init', async () => {
-<<<<<<< Updated upstream
-    try {
-      // Verify agent binary exists
-      const fs = require('fs');
-      if (!fs.existsSync(AGENT_BIN)) {
-        throw new Error(`agent binary not found at ${AGENT_BIN}`);
-      }
-
-      // Catch up if agent is still running
-      if (agentRunning && pendingOutput) {
-        socket.emit('response', { type: 'thinking', content: pendingOutput });
-      }
-
-      // Resend last response if client missed it
-      if (lastResponse && !agentRunning) {
-        console.log('[init] resending lastResponse to', socket.id);
-        socket.emit('response', lastResponse);
-      }
-
-      socket.emit('queue', queue);
-
-      socket.emit('status', {
-        connected: true,
-        message: agentRunning
-          ? 'Agent is busy — reconnected, catching up...'
-          : hasSession
-            ? 'Reconnected — session context intact'
-            : `Ready — ${WORK_DIR}`
-      });
-    } catch {
-      socket.emit('status', {
-        connected: false,
-        message: 'agent not found in PATH.'
-      });
-=======
     // Check availability of both CLIs
     const [agentAvail, claudeAvail] = await Promise.all([
       execAsync('which agent').then(() => true).catch(() => false),
@@ -312,7 +263,6 @@ io.on('connection', (socket) => {
     if (!agentAvail && !claudeAvail) {
       socket.emit('status', { connected: false, message: 'No agent CLI found in PATH.' });
       return;
->>>>>>> Stashed changes
     }
 
     // If current agentType isn't available, fall back to what is
@@ -326,8 +276,11 @@ io.on('connection', (socket) => {
 
     // If we have a completed response the client may have missed — resend it
     if (lastResponse && !agentRunning) {
+      console.log('[init] resending lastResponse to', socket.id);
       socket.emit('response', lastResponse);
     }
+
+    socket.emit('queue', queue);
 
     socket.emit('status', {
       connected: true,
@@ -374,38 +327,8 @@ io.on('connection', (socket) => {
     if (direction === 'up' && idx > 0) {
       [queue[idx - 1], queue[idx]] = [queue[idx], queue[idx - 1]];
     }
-<<<<<<< Updated upstream
     if (direction === 'down' && idx < queue.length - 1) {
       [queue[idx], queue[idx + 1]] = [queue[idx + 1], queue[idx]];
-=======
-
-    try {
-      agentRunning = true;
-      pendingOutput = '';
-      lastResponse = null;
-
-      socket.emit('response', { type: 'thinking', content: 'Agent is thinking...' });
-
-      const output = await runActive(message, (chunk) => {
-        // Broadcast to ALL connected sockets so any reconnected mobile gets it
-        io.emit('response', { type: 'thinking', content: chunk });
-      });
-
-      hasSession = true;
-
-      // Store final response server-side
-      lastResponse = { type: 'agent', content: output };
-      pendingOutput = '';
-
-      // Broadcast final response to everyone
-      io.emit('response', lastResponse);
-
-    } catch (err) {
-      agentRunning = false;
-      const errResponse = { type: 'error', content: err.message };
-      lastResponse = errResponse;
-      io.emit('response', errResponse);
->>>>>>> Stashed changes
     }
     emitQueue();
   });
