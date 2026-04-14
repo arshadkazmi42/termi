@@ -672,7 +672,6 @@ body { background: #080808; }
 
   <div class="mode-bar">
     <button class="mode-btn active" id="tab-chat" onclick="setMode('chat')">💬 chat</button>
-    <button class="mode-btn" id="tab-cmd" onclick="setMode('cmd')">⚡ shell</button>
     <button class="mode-btn" id="tab-screens" onclick="setMode('screens')">🖥 screens</button>
     <div class="agent-toggle" id="agentToggle">
       <button class="agent-opt active" id="opt-agent" onclick="switchAgent('agent')" title="Cursor Agent">cursor</button>
@@ -858,8 +857,7 @@ body { background: #080808; }
     el.value = '';
     resize(el);
 
-    if (mode === 'chat') socket.emit('chat', { message: msg });
-    else socket.emit('command', { command: msg });
+    socket.emit('chat', { message: msg });
   }
 
   function quick(cmd) {

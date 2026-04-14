@@ -435,18 +435,6 @@ io.on('connection', (socket) => {
     socket.emit('response', { type: 'system', content: 'Session reset — starting fresh.' });
   });
 
-  socket.on('command', async ({ command }) => {
-    try {
-      socket.emit('response', { type: 'thinking', content: `Running: ${command}` });
-      const output = await runCommand(command);
-      const cmdResponse = { type: 'command', content: output };
-      lastResponse = cmdResponse;
-      socket.emit('response', cmdResponse);
-    } catch (err) {
-      socket.emit('response', { type: 'error', content: err.message });
-    }
-  });
-
   // ── Screen session events ──────────────────────────
   socket.on('screen:list', async () => {
     const sessions = await listScreenSessions();
