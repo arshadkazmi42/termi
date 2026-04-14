@@ -78,6 +78,14 @@ if ! $IS_MACOS && id "termi" &>/dev/null; then
   fi
 fi
 
+# ── Tailscale note ───────────────────────────────────────
+if command -v tailscale &>/dev/null; then
+  echo ""
+  warn "Tailscale is installed but NOT removed (you may use it for other things)."
+  echo -e "  To remove: ${CYAN}tailscale down && sudo apt remove tailscale${NC} (Linux)"
+  echo -e "             ${CYAN}brew uninstall --cask tailscale${NC} (macOS)"
+fi
+
 # ── Done ─────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}╔════════════════════════════════════════╗${NC}"
