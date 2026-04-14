@@ -370,10 +370,20 @@ setup_claude_user() {
   fi
 }
 
-if command -v claude &>/dev/null || find /root/.local/bin -name claude &>/dev/null 2>/dev/null; then
-  setup_claude_user
+# Only setup claude user when running as root — non-root users already have their own claude
+if [ "$(id -u)" -eq 0 ]; then
+  if command -v claude &>/dev/null || find /root/.local/bin -name claude &>/dev/null 2>/dev/null; then
+    setup_claude_user
+  else
+    warn "claude CLI not found — skipping Claude Code setup (install it later and re-run deploy.sh)"
+  fi
 else
-  warn "claude CLI not found — skipping Claude Code setup (install it later and re-run deploy.sh)"
+  CLAUDE_USER=$(whoami)
+  if command -v claude &>/dev/null; then
+    ok "Claude Code available for ${CLAUDE_USER}"
+  else
+    warn "claude not found in PATH — install it and re-run deploy.sh"
+  fi
 fi
 
 # ── Write .env ────────────────────────────────────────────
