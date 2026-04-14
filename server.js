@@ -183,17 +183,19 @@ function runClaudeCode(message, onChunk) {
     let output = '';
     let error = '';
 
-    const userInfo = getClaudeUid();
     const args = ['--print', '--dangerously-skip-permissions'];
     if (hasSession) args.push('--continue');
     args.push(message);
+
+    // Only switch user if running as root and CLAUDE_USER is different
+    const isRoot = process.getuid && process.getuid() === 0;
+    const userInfo = isRoot ? getClaudeUid() : null;
 
     const spawnOpts = {
       cwd: WORK_DIR,
       env: {
         ...process.env,
-        HOME: userInfo ? userInfo.home : process.env.HOME,
-        USER: CLAUDE_USER,
+        ...(userInfo ? { HOME: userInfo.home, USER: CLAUDE_USER } : {}),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
       ...(userInfo ? { uid: userInfo.uid, gid: userInfo.gid } : {}),
