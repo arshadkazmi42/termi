@@ -593,7 +593,7 @@ transition: all 0.15s;
 /* Screen terminal view */
 #screenTermView { display: none; flex-direction: column; flex: 1; min-height: 0; }
 #screenTermView.active { display: flex; }
-#screenTermContainer { flex: 1; min-height: 0; padding: 4px; background: #0d0d0d; }
+#screenTermContainer { flex: 1; min-height: 0; padding: 4px; background: #0d0d0d; overflow: hidden; }
 
 .screen-term-header {
   display: flex; align-items: center; gap: 10px; padding: 8px 16px;
@@ -714,7 +714,7 @@ body { background: #080808; }
       <div class="input-wrap">
         <textarea
           id="screenInput"
-          placeholder="Type a command..."
+          placeholder="Send message to session..."
           rows="1"
           onkeydown="onScreenKey(event)"
           oninput="resize(this)"
@@ -987,18 +987,12 @@ body { background: #080808; }
     screenFitAddon = new FitAddon.FitAddon();
     screenTerm.loadAddon(screenFitAddon);
     screenTerm.open(container);
-    setTimeout(() => {
-      screenFitAddon.fit();
-      if (screenTerm.rows < 40) screenTerm.resize(screenTerm.cols, 40);
-    }, 50);
+    setTimeout(() => { screenFitAddon.fit(); }, 50);
     window.addEventListener('resize', handleScreenResize);
   }
 
   function handleScreenResize() {
-    if (screenFitAddon && screenTerm) {
-      screenFitAddon.fit();
-      if (screenTerm.rows < 40) screenTerm.resize(screenTerm.cols, 40);
-    }
+    if (screenFitAddon && screenTerm) screenFitAddon.fit();
   }
 
   function screenSend() {
