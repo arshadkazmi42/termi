@@ -9,6 +9,9 @@
 <meta name="theme-color" content="#0d0d0d">
 <title>termi</title>
 <script src="/socket.io/socket.io.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -553,6 +556,64 @@ transition: all 0.15s;
 .send-btn:active { transform: scale(0.9); opacity: 0.8; }
 .send-btn:disabled { background: var(--border); color: var(--muted); }
 
+/* ── Screen Sessions ─────────────────────────────── */
+#screenView { display: none; flex-direction: column; flex: 1; min-height: 0; }
+#screenView.active { display: flex; }
+
+#screenSessionList {
+  flex: 1; overflow-y: auto; padding: 16px; display: flex;
+  flex-direction: column; gap: 10px; -webkit-overflow-scrolling: touch;
+}
+#screenSessionList::-webkit-scrollbar { width: 3px; }
+#screenSessionList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.screen-empty {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; flex: 1; gap: 12px; color: var(--muted);
+  font-family: var(--mono); font-size: 13px; text-align: center; padding: 40px 20px;
+}
+
+.screen-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px; cursor: pointer;
+  transition: all 0.15s; display: flex; align-items: center; gap: 12px;
+  animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.screen-card:active { background: var(--surface2); transform: scale(0.98); border-color: var(--accent); }
+
+.screen-indicator { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.screen-indicator.attached { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.screen-indicator.detached { background: #ff9800; box-shadow: 0 0 8px #ff9800; }
+
+.screen-info { flex: 1; min-width: 0; }
+.screen-name { font-family: var(--mono); font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.screen-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; display: flex; gap: 10px; }
+.screen-arrow { color: var(--muted); font-size: 16px; flex-shrink: 0; }
+
+/* Screen terminal view */
+#screenTermView { display: none; flex-direction: column; flex: 1; min-height: 0; }
+#screenTermView.active { display: flex; }
+#screenTermContainer { flex: 1; min-height: 0; padding: 4px; background: #0d0d0d; }
+
+.screen-term-header {
+  display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.screen-back-btn {
+  background: none; border: none; color: var(--accent); font-size: 18px;
+  cursor: pointer; padding: 4px 8px; font-family: var(--mono);
+}
+.screen-back-btn:active { opacity: 0.6; }
+.screen-term-name { font-family: var(--mono); font-size: 13px; font-weight: 600; flex: 1; }
+.screen-term-status { font-family: var(--mono); font-size: 11px; }
+
+.screen-input-area {
+  flex-shrink: 0; padding: 8px 16px;
+  padding-bottom: calc(10px + var(--safe-bottom));
+  background: var(--surface); border-top: 1px solid var(--border);
+  display: flex; align-items: flex-end; gap: 10px;
+}
+
 /* ── Desktop adjustments ─────────────────────────── */
 @media (min-width: 600px) {
 #app { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
@@ -612,6 +673,7 @@ body { background: #080808; }
   <div class="mode-bar">
     <button class="mode-btn active" id="tab-chat" onclick="setMode('chat')">💬 chat</button>
     <button class="mode-btn" id="tab-cmd" onclick="setMode('cmd')">⚡ shell</button>
+    <button class="mode-btn" id="tab-screens" onclick="setMode('screens')">🖥 screens</button>
     <div class="agent-toggle" id="agentToggle">
       <button class="agent-opt active" id="opt-agent" onclick="switchAgent('agent')" title="Cursor Agent">cursor</button>
       <button class="agent-opt" id="opt-claude" onclick="switchAgent('claude')" title="Claude Code">claude</button>
@@ -634,7 +696,36 @@ body { background: #080808; }
     <div class="quick-chip" onclick="quick('deploy latest changes')">deploy</div>
   </div>
 
-  <div class="input-area">
+  <!-- Screen Session List -->
+  <div id="screenView">
+    <div id="screenSessionList">
+      <div class="screen-empty">🖥 loading sessions...</div>
+    </div>
+  </div>
+
+  <!-- Screen Terminal View -->
+  <div id="screenTermView">
+    <div class="screen-term-header">
+      <button class="screen-back-btn" onclick="screenGoBack()">&#8592;</button>
+      <div class="screen-term-name" id="screenTermName"></div>
+      <div class="screen-term-status" id="screenTermStatus"></div>
+    </div>
+    <div id="screenTermContainer"></div>
+    <div class="screen-input-area">
+      <div class="input-wrap">
+        <textarea
+          id="screenInput"
+          placeholder="Type a command..."
+          rows="1"
+          onkeydown="onScreenKey(event)"
+          oninput="resize(this)"
+        ></textarea>
+      </div>
+      <button class="send-btn" onclick="screenSend()">↑</button>
+    </div>
+  </div>
+
+  <div class="input-area" id="mainInputArea">
     <div class="input-wrap">
       <textarea
         id="input"
@@ -655,6 +746,12 @@ body { background: #080808; }
   let connected = false;
   let thinkingEl = null;
   let activeAgent = 'agent'; // 'agent' | 'claude'
+
+  // Screen session state
+  let screenTerm = null;
+  let screenFitAddon = null;
+  let currentScreenSession = null;
+  let screenRefreshInterval = null;
 
   // ── Auth ──────────────────────────────────────────
   function authenticate() {
@@ -697,7 +794,6 @@ body { background: #080808; }
     socket.on('response', ({ type, content }) => {
       if (type === 'thinking') {
         if (thinkingEl) {
-          // Update in place
           thinkingEl.querySelector('.msg-bubble').textContent = content || '';
         } else {
           thinkingEl = addMsg('thinking', '');
@@ -707,6 +803,21 @@ body { background: #080808; }
         if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
         addMsg(type, content);
       }
+    });
+
+    // ── Screen session events ──────────────────────
+    socket.on('screen:list', ({ sessions }) => {
+      renderScreenSessions(sessions);
+    });
+
+    socket.on('screen:output', ({ content }) => {
+      if (!screenTerm) return;
+      screenTerm.clear();
+      screenTerm.write(content);
+    });
+
+    socket.on('screen:error', ({ message }) => {
+      console.error('[screen error]', message);
     });
   }
 
@@ -761,8 +872,152 @@ body { background: #080808; }
     mode = m;
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(`tab-${m}`).classList.add('active');
-    const el = document.getElementById('input');
-    el.placeholder = m === 'chat' ? 'Message your agent...' : 'ls -la, ps aux, cat file...';
+
+    // Toggle visibility of views
+    const messages = document.getElementById('messages');
+    const quickRow = document.getElementById('quickRow');
+    const mainInput = document.getElementById('mainInputArea');
+    const screenView = document.getElementById('screenView');
+    const screenTermView = document.getElementById('screenTermView');
+
+    if (m === 'screens') {
+      messages.style.display = 'none';
+      quickRow.style.display = 'none';
+      mainInput.style.display = 'none';
+      if (currentScreenSession) {
+        screenView.classList.remove('active');
+        screenTermView.classList.add('active');
+      } else {
+        screenView.classList.add('active');
+        screenTermView.classList.remove('active');
+        loadScreenSessions();
+        startScreenRefresh();
+      }
+    } else {
+      messages.style.display = 'flex';
+      quickRow.style.display = 'flex';
+      mainInput.style.display = 'flex';
+      screenView.classList.remove('active');
+      screenTermView.classList.remove('active');
+      stopScreenRefresh();
+      const el = document.getElementById('input');
+      el.placeholder = m === 'chat' ? 'Message your agent...' : 'ls -la, ps aux, cat file...';
+    }
+  }
+
+  // ── Screen Sessions ──────────────────────────────
+  function loadScreenSessions() {
+    if (socket && connected) socket.emit('screen:list');
+  }
+
+  function startScreenRefresh() {
+    stopScreenRefresh();
+    screenRefreshInterval = setInterval(() => {
+      if (!currentScreenSession) loadScreenSessions();
+    }, 10000);
+  }
+
+  function stopScreenRefresh() {
+    if (screenRefreshInterval) { clearInterval(screenRefreshInterval); screenRefreshInterval = null; }
+  }
+
+  function renderScreenSessions(sessions) {
+    const el = document.getElementById('screenSessionList');
+    if (currentScreenSession) return;
+
+    if (sessions.length === 0) {
+      el.innerHTML = '<div class="screen-empty">No screen sessions running<br><span style="font-size:11px;color:var(--muted)">Start one with: screen -S mySession</span></div>';
+      return;
+    }
+
+    el.innerHTML = sessions.map(s => `
+      <div class="screen-card" onclick="screenJoin('${escAttr(s.fullName)}','${escAttr(s.name)}','${s.status}')">
+        <div class="screen-indicator ${s.status}"></div>
+        <div class="screen-info">
+          <div class="screen-name">${escHtml(s.name)}</div>
+          <div class="screen-meta"><span>PID ${s.pid}</span><span>${s.status}</span></div>
+        </div>
+        <div class="screen-arrow">&#8250;</div>
+      </div>
+    `).join('');
+  }
+
+  function escAttr(t) {
+    return String(t).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  }
+
+  function screenJoin(fullName, name, status) {
+    currentScreenSession = fullName;
+    document.getElementById('screenView').classList.remove('active');
+    document.getElementById('screenTermView').classList.add('active');
+    document.getElementById('screenTermName').textContent = name;
+    document.getElementById('screenTermStatus').textContent = status === 'attached' ? '🟢 live' : '🟠 detached';
+    document.getElementById('screenTermStatus').style.color = status === 'attached' ? 'var(--accent)' : '#ff9800';
+
+    initScreenTerminal();
+    socket.emit('screen:join', { sessionName: fullName });
+    document.getElementById('screenInput').focus();
+  }
+
+  function screenGoBack() {
+    if (!currentScreenSession) return;
+    socket.emit('screen:leave', { sessionName: currentScreenSession });
+    currentScreenSession = null;
+    if (screenTerm) { screenTerm.dispose(); screenTerm = null; screenFitAddon = null; }
+    document.getElementById('screenTermView').classList.remove('active');
+    document.getElementById('screenView').classList.add('active');
+    loadScreenSessions();
+  }
+
+  function initScreenTerminal() {
+    const container = document.getElementById('screenTermContainer');
+    container.innerHTML = '';
+    screenTerm = new Terminal({
+      cursorBlink: false, cursorStyle: 'block', disableStdin: true,
+      fontSize: 13, fontFamily: 'IBM Plex Mono, monospace', rows: 40,
+      theme: {
+        background: '#0d0d0d', foreground: '#ececec', cursor: '#ececec',
+        selectionBackground: '#448aff44',
+        black: '#0d0d0d', red: '#ff5252', green: '#00e676', yellow: '#ff9800',
+        blue: '#448aff', magenta: '#e040fb', cyan: '#18ffff', white: '#ececec',
+        brightBlack: '#666666', brightRed: '#ff8a80', brightGreen: '#69f0ae',
+        brightYellow: '#ffd740', brightBlue: '#82b1ff', brightMagenta: '#ea80fc',
+        brightCyan: '#84ffff', brightWhite: '#ffffff',
+      },
+      scrollback: 5000, convertEol: true,
+    });
+    screenFitAddon = new FitAddon.FitAddon();
+    screenTerm.loadAddon(screenFitAddon);
+    screenTerm.open(container);
+    setTimeout(() => {
+      screenFitAddon.fit();
+      if (screenTerm.rows < 40) screenTerm.resize(screenTerm.cols, 40);
+    }, 50);
+    window.addEventListener('resize', handleScreenResize);
+  }
+
+  function handleScreenResize() {
+    if (screenFitAddon && screenTerm) {
+      screenFitAddon.fit();
+      if (screenTerm.rows < 40) screenTerm.resize(screenTerm.cols, 40);
+    }
+  }
+
+  function screenSend() {
+    const el = document.getElementById('screenInput');
+    const msg = el.value;
+    if (!msg || !connected || !currentScreenSession) return;
+    socket.emit('screen:input', { sessionName: currentScreenSession, message: msg });
+    el.value = '';
+    resize(el);
+  }
+
+  function onScreenKey(e) {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      screenSend();
+    }
   }
 
   // ── Agent switcher ────────────────────────────────

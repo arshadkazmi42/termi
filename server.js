@@ -3,6 +3,7 @@ const { exec, spawn } = require('child_process');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 const util = require('util');
 const os = require('os');
 
@@ -243,6 +244,89 @@ async function runCommand(command) {
   }
 }
 
+// ── Screen Session Management ────────────────────────────
+const SCREEN_POLL_INTERVAL = 1000;
+const TMP_DIR = '/tmp';
+const screenBuffers = new Map();
+
+async function listScreenSessions() {
+  try {
+    const { stdout } = await execAsync('screen -ls', { timeout: 5000 });
+    return parseScreenLs(stdout);
+  } catch (err) {
+    if (err.stdout) return parseScreenLs(err.stdout);
+    return [];
+  }
+}
+
+function parseScreenLs(output) {
+  const sessions = [];
+  for (const line of output.split('\n')) {
+    const match = line.match(/^\t(\d+)\.(\S+)\t\(([^)]+)\)/);
+    if (!match) continue;
+    const pid = match[1];
+    const name = match[2];
+    const statusRaw = match[3].toLowerCase();
+    const attached = statusRaw.includes('attached');
+    sessions.push({ pid, name, fullName: `${pid}.${name}`, status: attached ? 'attached' : 'detached' });
+  }
+  return sessions;
+}
+
+async function captureScreenOutput(sessionName) {
+  const safeName = sessionName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const tmpFile = path.join(TMP_DIR, `termi_screen_${safeName}.txt`);
+  try {
+    await execAsync(`screen -S ${sessionName} -X hardcopy -h ${tmpFile}`, { timeout: 5000 });
+    return await fs.promises.readFile(tmpFile, 'utf-8');
+  } catch (_) {
+    return null;
+  }
+}
+
+async function sendScreenInput(sessionName, message) {
+  const escaped = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  try {
+    await execAsync(`screen -S ${sessionName} -X stuff "${escaped}\n"`, { timeout: 5000 });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function startScreenPolling(socket, sessionName) {
+  const key = `${socket.id}:${sessionName}`;
+  stopScreenPolling(socket, sessionName);
+  const state = { lastContent: '', interval: null };
+  state.interval = setInterval(async () => {
+    const content = await captureScreenOutput(sessionName);
+    if (content === null) return;
+    if (content !== state.lastContent) {
+      state.lastContent = content;
+      socket.emit('screen:output', { content, full: true });
+    }
+  }, SCREEN_POLL_INTERVAL);
+  screenBuffers.set(key, state);
+}
+
+function stopScreenPolling(socket, sessionName) {
+  const key = `${socket.id}:${sessionName}`;
+  const state = screenBuffers.get(key);
+  if (state) {
+    clearInterval(state.interval);
+    screenBuffers.delete(key);
+  }
+}
+
+function stopAllScreenPolling(socketId) {
+  for (const [key, state] of screenBuffers.entries()) {
+    if (key.startsWith(`${socketId}:`)) {
+      clearInterval(state.interval);
+      screenBuffers.delete(key);
+    }
+  }
+}
+
 // ── Socket ────────────────────────────────────────────
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
@@ -363,9 +447,55 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Screen session events ──────────────────────────
+  socket.on('screen:list', async () => {
+    const sessions = await listScreenSessions();
+    socket.emit('screen:list', { sessions });
+  });
+
+  socket.on('screen:join', async ({ sessionName }) => {
+    console.log('[screen] join:', sessionName);
+    const content = await captureScreenOutput(sessionName);
+    if (content !== null) socket.emit('screen:output', { content, full: true });
+    startScreenPolling(socket, sessionName);
+  });
+
+  socket.on('screen:leave', ({ sessionName }) => {
+    console.log('[screen] leave:', sessionName);
+    stopScreenPolling(socket, sessionName);
+  });
+
+  socket.on('screen:input', async ({ sessionName, message }) => {
+    const ok = await sendScreenInput(sessionName, message);
+    if (!ok) socket.emit('screen:error', { message: 'Failed to send input to session' });
+  });
+
   socket.on('disconnect', (reason) => {
     console.log('[socket] disconnected:', socket.id, 'reason:', reason, 'agent running:', agentRunning);
+    stopAllScreenPolling(socket.id);
   });
 });
 
-server.listen(PORT, () => console.log(`Agent UI on port ${PORT} | workdir: ${WORK_DIR}`));
+// ── Start server ─────────────────────────────────────────
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Agent UI on port ${PORT} | workdir: ${WORK_DIR}`));
+}
+
+// ── Exports for testing ──────────────────────────────────
+module.exports = {
+  app, server, io,
+  parseScreenLs,
+  captureScreenOutput,
+  sendScreenInput,
+  listScreenSessions,
+  startScreenPolling,
+  stopScreenPolling,
+  stopAllScreenPolling,
+  screenBuffers,
+  spawnRunner,
+  runCommand,
+  getState: () => ({ queue, hasSession, agentRunning, agentType, lastResponse, pendingOutput }),
+  resetState: () => { queue = []; hasSession = false; agentRunning = false; lastResponse = null; pendingOutput = ''; agentType = 'agent'; },
+  AUTH_TOKEN,
+  PORT,
+};

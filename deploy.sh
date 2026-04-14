@@ -197,14 +197,43 @@ install_cloudflared() {
   ok "cloudflared installed"
 }
 
-if ! command -v cloudflared &>/dev/null; then
-  read -p "Install cloudflared for secure tunnel? (recommended) [Y/n]: " CF
-  CF=${CF:-Y}
-  if [[ "$CF" =~ ^[Yy] ]]; then
+USE_CLOUDFLARE=false
+USE_CF_ACCESS=false
+
+read -p "Setup Cloudflare tunnel for secure remote access? [y/N]: " CF
+CF=${CF:-N}
+if [[ "$CF" =~ ^[Yy] ]]; then
+  USE_CLOUDFLARE=true
+  if ! command -v cloudflared &>/dev/null; then
     install_cloudflared
+  else
+    ok "cloudflared $(cloudflared --version 2>&1 | head -1) already installed"
+  fi
+
+  echo ""
+  echo -e "${BOLD}Cloudflare Access (Google Login)${NC}"
+  echo -e "  Adds Google authentication in front of termi via Cloudflare Access."
+  echo -e "  Requires: Cloudflare account + domain on Cloudflare DNS."
+  echo ""
+  read -p "Setup Cloudflare Access with Google login? [y/N]: " CFA
+  CFA=${CFA:-N}
+  if [[ "$CFA" =~ ^[Yy] ]]; then
+    USE_CF_ACCESS=true
+
+    read -p "Cloudflare tunnel name [termi]: " CF_TUNNEL_NAME
+    CF_TUNNEL_NAME=${CF_TUNNEL_NAME:-termi}
+
+    read -p "Domain to expose termi on (e.g. termi.yourdomain.com): " CF_DOMAIN
+    if [ -z "$CF_DOMAIN" ]; then
+      warn "No domain entered — skipping Cloudflare Access setup"
+      USE_CF_ACCESS=false
+    else
+      read -p "Allowed Google email domain (e.g. yourdomain.com) or specific email: " CF_ALLOWED_EMAIL
+      CF_ALLOWED_EMAIL=${CF_ALLOWED_EMAIL:-*}
+    fi
   fi
 else
-  ok "cloudflared $(cloudflared --version 2>&1 | head -1) already installed"
+  info "Skipping Cloudflare tunnel setup"
 fi
 
 # ── Deploy files ──────────────────────────────────────────
@@ -343,23 +372,104 @@ else
 fi
 PUBLIC_URL="http://${LOCAL_IP}:${PORT}"
 
-# ── Start cloudflare tunnel if installed ──────────────────
-if command -v cloudflared &>/dev/null; then
-  info "Starting Cloudflare tunnel..."
+# ── Start Cloudflare tunnel (if requested) ───────────────
+CF_URL=""
+if $USE_CLOUDFLARE; then
   pm2 delete termi-tunnel 2>/dev/null || true
-  pm2 start "cloudflared tunnel --url http://localhost:${PORT}" \
-    --name termi-tunnel --no-autorestart 2>/dev/null || true
-  pm2 save
-  warn "Cloudflare URL will appear in: pm2 logs termi-tunnel"
+
+  if $USE_CF_ACCESS; then
+    # ── Named tunnel with Cloudflare Access ──────────────
+    info "Setting up Cloudflare named tunnel with Access..."
+
+    # Login to cloudflare if not already
+    if [ ! -f "$HOME/.cloudflared/cert.pem" ]; then
+      info "Authenticating with Cloudflare — a browser window will open..."
+      cloudflared tunnel login
+    fi
+
+    # Create tunnel (or reuse existing)
+    if ! cloudflared tunnel info "$CF_TUNNEL_NAME" &>/dev/null; then
+      cloudflared tunnel create "$CF_TUNNEL_NAME"
+      ok "Created tunnel: ${CF_TUNNEL_NAME}"
+    else
+      ok "Tunnel ${CF_TUNNEL_NAME} already exists"
+    fi
+
+    # Get tunnel ID
+    CF_TUNNEL_ID=$(cloudflared tunnel info "$CF_TUNNEL_NAME" 2>/dev/null | grep -oP 'Your tunnel \K[a-f0-9-]+' || cloudflared tunnel list 2>/dev/null | grep "$CF_TUNNEL_NAME" | awk '{print $1}')
+
+    if [ -z "$CF_TUNNEL_ID" ]; then
+      warn "Could not get tunnel ID — check 'cloudflared tunnel list'"
+    else
+      # Write tunnel config
+      mkdir -p "$HOME/.cloudflared"
+      cat > "$HOME/.cloudflared/config-termi.yml" << CFGEOF
+tunnel: ${CF_TUNNEL_ID}
+credentials-file: ${HOME}/.cloudflared/${CF_TUNNEL_ID}.json
+
+ingress:
+  - hostname: ${CF_DOMAIN}
+    service: http://localhost:${PORT}
+  - service: http_status:404
+CFGEOF
+      ok "Tunnel config written to ~/.cloudflared/config-termi.yml"
+
+      # Create DNS route
+      info "Creating DNS route ${CF_DOMAIN} -> tunnel..."
+      cloudflared tunnel route dns "$CF_TUNNEL_NAME" "$CF_DOMAIN" 2>/dev/null || warn "DNS route may already exist"
+
+      # Start named tunnel via PM2
+      pm2 start "cloudflared tunnel --config ${HOME}/.cloudflared/config-termi.yml run ${CF_TUNNEL_NAME}" \
+        --name termi-tunnel --update-env 2>/dev/null || true
+      pm2 save
+
+      CF_URL="https://${CF_DOMAIN}"
+      ok "Named tunnel started — ${CF_URL}"
+
+      # ── Cloudflare Access policy ─────────────────────
+      echo ""
+      echo -e "${BOLD}Cloudflare Access — Google Login${NC}"
+      echo ""
+      echo -e "  Cloudflare Access policies must be configured via the dashboard."
+      echo -e "  Follow these steps:"
+      echo ""
+      echo -e "  1. Go to ${CYAN}https://one.dash.cloudflare.com${NC}"
+      echo -e "  2. Navigate to ${CYAN}Access → Applications → Add an application${NC}"
+      echo -e "  3. Choose ${CYAN}Self-hosted${NC}"
+      echo -e "  4. Set application domain to: ${CYAN}${CF_DOMAIN}${NC}"
+      echo -e "  5. Add a policy:"
+      echo -e "     - Action: ${CYAN}Allow${NC}"
+      echo -e "     - Include: ${CYAN}Emails ending in ${CF_ALLOWED_EMAIL}${NC}"
+      echo -e "  6. Under ${CYAN}Authentication → Identity providers${NC}, add ${CYAN}Google${NC}"
+      echo -e "     (requires Google OAuth client ID + secret from console.cloud.google.com)"
+      echo ""
+      echo -e "  ${YELLOW}Google OAuth setup:${NC}"
+      echo -e "  1. Go to ${CYAN}console.cloud.google.com → APIs & Services → Credentials${NC}"
+      echo -e "  2. Create OAuth 2.0 Client ID (Web application)"
+      echo -e "  3. Add redirect URI: ${CYAN}https://<your-team>.cloudflareaccess.com/cdn-cgi/access/callback${NC}"
+      echo -e "  4. Copy Client ID + Secret into Cloudflare Access identity provider settings"
+      echo ""
+    fi
+  else
+    # ── Quick tunnel (random URL, no Access) ─────────────
+    info "Starting Cloudflare quick tunnel..."
+    pm2 start "cloudflared tunnel --url http://localhost:${PORT}" \
+      --name termi-tunnel --no-autorestart 2>/dev/null || true
+    pm2 save
+    warn "Cloudflare URL will appear in: pm2 logs termi-tunnel"
+  fi
 fi
 
 # ── Done ──────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}╔════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║           SETUP DONE ✓                 ║${NC}"
+echo -e "${BOLD}║           SETUP DONE                   ║${NC}"
 echo -e "${BOLD}╚════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  ${CYAN}Local URL:${NC}    $PUBLIC_URL"
+if [ -n "$CF_URL" ]; then
+echo -e "  ${CYAN}Public URL:${NC}   $CF_URL (Cloudflare Access protected)"
+fi
 echo -e "  ${CYAN}Token:${NC}        $AUTH_TOKEN"
 echo -e "  ${CYAN}Workdir:${NC}      $WORK_DIR"
 echo -e "  ${CYAN}Install dir:${NC}  $INSTALL_DIR"
@@ -369,11 +479,13 @@ if $IS_MACOS; then
 echo -e "  ${YELLOW}macOS notes:${NC}"
 echo -e "  • Open http://localhost:${PORT} in browser"
 echo -e "  • Use cloudflare tunnel URL for mobile access"
-fi
 echo ""
+fi
+if $USE_CLOUDFLARE && ! $USE_CF_ACCESS; then
 echo -e "  ${YELLOW}View cloudflare URL:${NC}"
 echo -e "  pm2 logs termi-tunnel"
 echo ""
+fi
 echo -e "  ${YELLOW}Manage:${NC}"
 echo -e "  pm2 status          — check running processes"
 echo -e "  pm2 logs agent-ui   — view server logs"
