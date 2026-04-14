@@ -279,8 +279,8 @@ fi
 # ── Deploy files ──────────────────────────────────────────
 info "Deploying files..."
 
-# macOS uses /usr/local/opt, Linux uses /opt
-if $IS_MACOS; then
+# Install to home dir for non-root or macOS, /opt for root Linux
+if $IS_MACOS || [ "$(id -u)" -ne 0 ]; then
   INSTALL_DIR="$HOME/.termi"
 else
   INSTALL_DIR="/opt/agent-ui"

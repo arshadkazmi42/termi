@@ -45,7 +45,7 @@ fi
 IS_MACOS=false
 [[ "$(uname -s)" == "Darwin" ]] && IS_MACOS=true
 
-if $IS_MACOS; then
+if $IS_MACOS || [ "$(id -u)" -ne 0 ]; then
   INSTALL_DIR="$HOME/.termi"
 else
   INSTALL_DIR="/opt/agent-ui"
