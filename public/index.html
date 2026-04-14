@@ -590,29 +590,59 @@ transition: all 0.15s;
 .screen-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; display: flex; gap: 10px; }
 .screen-arrow { color: var(--muted); font-size: 16px; flex-shrink: 0; }
 
-/* Screen terminal view */
-#screenTermView { display: none; flex-direction: column; flex: 1; min-height: 0; }
+/* Screen terminal view — full screen overlay */
+#screenTermView {
+  display: none; position: fixed; inset: 0; z-index: 50;
+  flex-direction: column; background: var(--bg);
+}
 #screenTermView.active { display: flex; }
-#screenTermContainer { flex: 1; min-height: 0; padding: 4px; background: #0d0d0d; overflow: hidden; }
 
 .screen-term-header {
-  display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; padding-top: calc(10px + var(--safe-top));
   background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
 .screen-back-btn {
-  background: none; border: none; color: var(--accent); font-size: 18px;
-  cursor: pointer; padding: 4px 8px; font-family: var(--mono);
+  background: var(--surface2); border: 1px solid var(--border); color: var(--accent);
+  font-size: 16px; cursor: pointer; padding: 8px 12px; font-family: var(--mono);
+  border-radius: 8px; display: flex; align-items: center; gap: 6px;
+  font-weight: 600; white-space: nowrap;
 }
-.screen-back-btn:active { opacity: 0.6; }
-.screen-term-name { font-family: var(--mono); font-size: 13px; font-weight: 600; flex: 1; }
-.screen-term-status { font-family: var(--mono); font-size: 11px; }
+.screen-back-btn:active { opacity: 0.6; transform: scale(0.95); }
+.screen-term-name {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.screen-term-status { font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+
+#screenTermContainer {
+  flex: 1; min-height: 0; padding: 4px; background: #0d0d0d; overflow: hidden;
+}
 
 .screen-input-area {
-  flex-shrink: 0; padding: 8px 16px;
+  flex-shrink: 0; padding: 8px 12px;
   padding-bottom: calc(10px + var(--safe-bottom));
   background: var(--surface); border-top: 1px solid var(--border);
-  display: flex; align-items: flex-end; gap: 10px;
+  display: flex; align-items: flex-end; gap: 8px;
 }
+.screen-input-area .input-wrap {
+  flex: 1; background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 22px; display: flex; align-items: flex-end;
+  padding: 10px 16px; min-height: 44px;
+}
+.screen-input-area .input-wrap:focus-within { border-color: var(--accent); }
+.screen-input-area textarea {
+  flex: 1; background: none; border: none; outline: none; color: var(--text);
+  font-family: var(--mono); font-size: 15px; line-height: 1.4; resize: none;
+  max-height: 100px; min-height: 22px; -webkit-appearance: none;
+}
+.screen-input-area textarea::placeholder { color: var(--muted); }
+.screen-input-area .send-btn {
+  width: 44px; height: 44px; border-radius: 50%; background: var(--accent);
+  border: none; color: #000; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.screen-input-area .send-btn:active { transform: scale(0.9); opacity: 0.8; }
 
 /* ── Desktop adjustments ─────────────────────────── */
 @media (min-width: 600px) {
@@ -702,28 +732,6 @@ body { background: #080808; }
     </div>
   </div>
 
-  <!-- Screen Terminal View -->
-  <div id="screenTermView">
-    <div class="screen-term-header">
-      <button class="screen-back-btn" onclick="screenGoBack()">&#8592;</button>
-      <div class="screen-term-name" id="screenTermName"></div>
-      <div class="screen-term-status" id="screenTermStatus"></div>
-    </div>
-    <div id="screenTermContainer"></div>
-    <div class="screen-input-area">
-      <div class="input-wrap">
-        <textarea
-          id="screenInput"
-          placeholder="Send message to session..."
-          rows="1"
-          onkeydown="onScreenKey(event)"
-          oninput="resize(this)"
-        ></textarea>
-      </div>
-      <button class="send-btn" onclick="screenSend()">↑</button>
-    </div>
-  </div>
-
   <div class="input-area" id="mainInputArea">
     <div class="input-wrap">
       <textarea
@@ -735,6 +743,28 @@ body { background: #080808; }
       ></textarea>
     </div>
     <button class="send-btn" id="sendBtn" onclick="send()" disabled>↑</button>
+  </div>
+</div>
+
+<!-- Screen Terminal View — full screen overlay -->
+<div id="screenTermView">
+  <div class="screen-term-header">
+    <button class="screen-back-btn" onclick="screenGoBack()">&#8592; Back</button>
+    <div class="screen-term-name" id="screenTermName"></div>
+    <div class="screen-term-status" id="screenTermStatus"></div>
+  </div>
+  <div id="screenTermContainer"></div>
+  <div class="screen-input-area">
+    <div class="input-wrap">
+      <textarea
+        id="screenInput"
+        placeholder="Send message to session..."
+        rows="1"
+        onkeydown="onScreenKey(event)"
+        oninput="resize(this)"
+      ></textarea>
+    </div>
+    <button class="send-btn" onclick="screenSend()">&#8593;</button>
   </div>
 </div>
 
@@ -946,24 +976,37 @@ body { background: #080808; }
 
   function screenJoin(fullName, name, status) {
     currentScreenSession = fullName;
-    document.getElementById('screenView').classList.remove('active');
+
+    // Show full-screen terminal overlay
     document.getElementById('screenTermView').classList.add('active');
     document.getElementById('screenTermName').textContent = name;
-    document.getElementById('screenTermStatus').textContent = status === 'attached' ? '🟢 live' : '🟠 detached';
+    document.getElementById('screenTermStatus').textContent = status === 'attached' ? '● live' : '○ detached';
     document.getElementById('screenTermStatus').style.color = status === 'attached' ? 'var(--accent)' : '#ff9800';
 
     initScreenTerminal();
     socket.emit('screen:join', { sessionName: fullName });
-    document.getElementById('screenInput').focus();
+
+    // Focus input after terminal renders
+    setTimeout(() => { document.getElementById('screenInput').focus(); }, 400);
   }
 
   function screenGoBack() {
     if (!currentScreenSession) return;
     socket.emit('screen:leave', { sessionName: currentScreenSession });
     currentScreenSession = null;
-    if (screenTerm) { screenTerm.dispose(); screenTerm = null; screenFitAddon = null; }
+
+    // Dispose terminal
+    if (screenTerm) {
+      window.removeEventListener('resize', handleScreenResize);
+      screenTerm.dispose();
+      screenTerm = null;
+      screenFitAddon = null;
+    }
+
+    // Hide overlay
     document.getElementById('screenTermView').classList.remove('active');
-    document.getElementById('screenView').classList.add('active');
+
+    // Refresh session list
     loadScreenSessions();
   }
 
@@ -972,7 +1015,7 @@ body { background: #080808; }
     container.innerHTML = '';
     screenTerm = new Terminal({
       cursorBlink: false, cursorStyle: 'block', disableStdin: true,
-      fontSize: 13, fontFamily: 'IBM Plex Mono, monospace', rows: 40,
+      fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
       theme: {
         background: '#0d0d0d', foreground: '#ececec', cursor: '#ececec',
         selectionBackground: '#448aff44',
@@ -987,7 +1030,9 @@ body { background: #080808; }
     screenFitAddon = new FitAddon.FitAddon();
     screenTerm.loadAddon(screenFitAddon);
     screenTerm.open(container);
-    setTimeout(() => { screenFitAddon.fit(); }, 50);
+    // Fit after layout settles
+    setTimeout(() => { screenFitAddon.fit(); }, 100);
+    setTimeout(() => { screenFitAddon.fit(); }, 300);
     window.addEventListener('resize', handleScreenResize);
   }
 
@@ -1002,11 +1047,12 @@ body { background: #080808; }
     socket.emit('screen:input', { sessionName: currentScreenSession, message: msg });
     el.value = '';
     resize(el);
+    // Keep focus on input for quick follow-up
+    el.focus();
   }
 
   function onScreenKey(e) {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (!isMobile && e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       screenSend();
     }
