@@ -248,10 +248,9 @@ async function runCommand(command) {
   }
 }
 
-// ── Screen Session Management ────────────────────────────
-const SCREEN_POLL_INTERVAL = 1000;
-const TMP_DIR = '/tmp';
-const screenBuffers = new Map();
+// ── Screen Session Management (node-pty + screen -x) ─────
+const pty = require('node-pty');
+const screenPtys = new Map(); // key: `${socketId}:${sessionName}` → { pty, sessionName }
 
 async function listScreenSessions() {
   try {
@@ -277,57 +276,73 @@ function parseScreenLs(output) {
   return sessions;
 }
 
-async function captureScreenOutput(sessionName) {
-  const safeName = sessionName.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const tmpFile = path.join(TMP_DIR, `termi_screen_${safeName}.txt`);
-  try {
-    await execAsync(`screen -S ${sessionName} -X hardcopy -h ${tmpFile}`, { timeout: 5000 });
-    return await fs.promises.readFile(tmpFile, 'utf-8');
-  } catch (_) {
-    return null;
-  }
-}
-
-async function sendScreenInput(sessionName, message) {
-  const escaped = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  try {
-    await execAsync(`screen -S ${sessionName} -X stuff "${escaped}\n"`, { timeout: 5000 });
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-function startScreenPolling(socket, sessionName) {
+function attachScreen(socket, sessionName, cols, rows) {
   const key = `${socket.id}:${sessionName}`;
-  stopScreenPolling(socket, sessionName);
-  const state = { lastContent: '', interval: null };
-  state.interval = setInterval(async () => {
-    const content = await captureScreenOutput(sessionName);
-    if (content === null) return;
-    if (content !== state.lastContent) {
-      state.lastContent = content;
-      socket.emit('screen:output', { content, full: true });
-    }
-  }, SCREEN_POLL_INTERVAL);
-  screenBuffers.set(key, state);
+  detachScreen(socket, sessionName);
+
+  console.log('[screen] attaching via node-pty:', sessionName, `${cols}x${rows}`);
+
+  const term = pty.spawn('screen', ['-x', sessionName], {
+    name: 'xterm-256color',
+    cols: cols || 80,
+    rows: rows || 24,
+    cwd: process.env.HOME,
+    env: process.env,
+  });
+
+  term.onData((data) => {
+    socket.emit('screen:output', { data });
+  });
+
+  term.onExit(({ exitCode }) => {
+    console.log('[screen] pty exited:', sessionName, 'code:', exitCode);
+    screenPtys.delete(key);
+    socket.emit('screen:exit', { sessionName, exitCode });
+  });
+
+  screenPtys.set(key, { pty: term, sessionName });
 }
 
-function stopScreenPolling(socket, sessionName) {
+function detachScreen(socket, sessionName) {
   const key = `${socket.id}:${sessionName}`;
-  const state = screenBuffers.get(key);
-  if (state) {
-    clearInterval(state.interval);
-    screenBuffers.delete(key);
+  const entry = screenPtys.get(key);
+  if (entry) {
+    // Send detach key (Ctrl-A d) to cleanly leave without killing session
+    entry.pty.write('\x01d');
+    setTimeout(() => {
+      try { entry.pty.kill(); } catch (_) {}
+    }, 500);
+    screenPtys.delete(key);
   }
 }
 
-function stopAllScreenPolling(socketId) {
-  for (const [key, state] of screenBuffers.entries()) {
+function detachAllScreens(socketId) {
+  for (const [key, entry] of screenPtys.entries()) {
     if (key.startsWith(`${socketId}:`)) {
-      clearInterval(state.interval);
-      screenBuffers.delete(key);
+      entry.pty.write('\x01d');
+      setTimeout(() => {
+        try { entry.pty.kill(); } catch (_) {}
+      }, 500);
+      screenPtys.delete(key);
     }
+  }
+}
+
+function sendScreenInput(socket, sessionName, data) {
+  const key = `${socket.id}:${sessionName}`;
+  const entry = screenPtys.get(key);
+  if (entry) {
+    entry.pty.write(data);
+    return true;
+  }
+  return false;
+}
+
+function resizeScreenPty(socket, sessionName, cols, rows) {
+  const key = `${socket.id}:${sessionName}`;
+  const entry = screenPtys.get(key);
+  if (entry) {
+    try { entry.pty.resize(cols, rows); } catch (_) {}
   }
 }
 
@@ -445,26 +460,27 @@ io.on('connection', (socket) => {
     socket.emit('screen:list', { sessions });
   });
 
-  socket.on('screen:join', async ({ sessionName }) => {
-    console.log('[screen] join:', sessionName);
-    const content = await captureScreenOutput(sessionName);
-    if (content !== null) socket.emit('screen:output', { content, full: true });
-    startScreenPolling(socket, sessionName);
+  socket.on('screen:join', ({ sessionName, cols, rows }) => {
+    console.log('[screen] join:', sessionName, `${cols}x${rows}`);
+    attachScreen(socket, sessionName, cols, rows);
   });
 
   socket.on('screen:leave', ({ sessionName }) => {
     console.log('[screen] leave:', sessionName);
-    stopScreenPolling(socket, sessionName);
+    detachScreen(socket, sessionName);
   });
 
-  socket.on('screen:input', async ({ sessionName, message }) => {
-    const ok = await sendScreenInput(sessionName, message);
-    if (!ok) socket.emit('screen:error', { message: 'Failed to send input to session' });
+  socket.on('screen:input', ({ sessionName, data }) => {
+    sendScreenInput(socket, sessionName, data);
+  });
+
+  socket.on('screen:resize', ({ sessionName, cols, rows }) => {
+    resizeScreenPty(socket, sessionName, cols, rows);
   });
 
   socket.on('disconnect', (reason) => {
     console.log('[socket] disconnected:', socket.id, 'reason:', reason, 'agent running:', agentRunning);
-    stopAllScreenPolling(socket.id);
+    detachAllScreens(socket.id);
   });
 });
 
@@ -477,13 +493,8 @@ if (require.main === module) {
 module.exports = {
   app, server, io,
   parseScreenLs,
-  captureScreenOutput,
-  sendScreenInput,
   listScreenSessions,
-  startScreenPolling,
-  stopScreenPolling,
-  stopAllScreenPolling,
-  screenBuffers,
+  screenPtys,
   spawnRunner,
   runCommand,
   getState: () => ({ queue, hasSession, agentRunning, agentType, lastResponse, pendingOutput }),

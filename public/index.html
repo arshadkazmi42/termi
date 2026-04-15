@@ -845,10 +845,14 @@ body { background: #080808; }
       renderScreenSessions(sessions);
     });
 
-    socket.on('screen:output', ({ content }) => {
+    socket.on('screen:output', ({ data }) => {
       if (!screenTerm) return;
-      screenTerm.clear();
-      screenTerm.write(content);
+      screenTerm.write(data);
+    });
+
+    socket.on('screen:exit', ({ sessionName }) => {
+      console.log('[screen] session exited:', sessionName);
+      if (currentScreenSession === sessionName) screenGoBack();
     });
 
     socket.on('screen:error', ({ message }) => {
@@ -990,7 +994,11 @@ body { background: #080808; }
     document.getElementById('screenTermStatus').style.color = status === 'attached' ? 'var(--accent)' : '#ff9800';
 
     initScreenTerminal();
-    socket.emit('screen:join', { sessionName: fullName });
+
+    // Join with terminal dimensions
+    const cols = screenTerm ? screenTerm.cols : 80;
+    const rows = screenTerm ? screenTerm.rows : 24;
+    socket.emit('screen:join', { sessionName: fullName, cols, rows });
 
     // Focus input after terminal renders
     setTimeout(() => { document.getElementById('screenInput').focus(); }, 400);
@@ -1020,7 +1028,7 @@ body { background: #080808; }
     const container = document.getElementById('screenTermContainer');
     container.innerHTML = '';
     screenTerm = new Terminal({
-      cursorBlink: false, cursorStyle: 'block', disableStdin: true,
+      cursorBlink: true, cursorStyle: 'block',
       fontSize: 12, fontFamily: 'IBM Plex Mono, monospace',
       theme: {
         background: '#0d0d0d', foreground: '#ececec', cursor: '#ececec',
@@ -1031,11 +1039,19 @@ body { background: #080808; }
         brightYellow: '#ffd740', brightBlue: '#82b1ff', brightMagenta: '#ea80fc',
         brightCyan: '#84ffff', brightWhite: '#ffffff',
       },
-      scrollback: 5000, convertEol: true,
+      scrollback: 5000,
     });
     screenFitAddon = new FitAddon.FitAddon();
     screenTerm.loadAddon(screenFitAddon);
     screenTerm.open(container);
+
+    // Pipe keyboard input to server PTY
+    screenTerm.onData((data) => {
+      if (socket && currentScreenSession) {
+        socket.emit('screen:input', { sessionName: currentScreenSession, data });
+      }
+    });
+
     // Fit after layout settles
     setTimeout(() => { screenFitAddon.fit(); }, 100);
     setTimeout(() => { screenFitAddon.fit(); }, 300);
@@ -1043,17 +1059,26 @@ body { background: #080808; }
   }
 
   function handleScreenResize() {
-    if (screenFitAddon && screenTerm) screenFitAddon.fit();
+    if (screenFitAddon && screenTerm) {
+      screenFitAddon.fit();
+      // Notify server of new size
+      if (socket && currentScreenSession) {
+        socket.emit('screen:resize', {
+          sessionName: currentScreenSession,
+          cols: screenTerm.cols, rows: screenTerm.rows
+        });
+      }
+    }
   }
 
   function screenSend() {
     const el = document.getElementById('screenInput');
     const msg = el.value;
     if (!msg || !connected || !currentScreenSession) return;
-    socket.emit('screen:input', { sessionName: currentScreenSession, message: msg });
+    // Send via PTY with newline
+    socket.emit('screen:input', { sessionName: currentScreenSession, data: msg + '\r' });
     el.value = '';
     resize(el);
-    // Keep focus on input for quick follow-up
     el.focus();
   }
 
