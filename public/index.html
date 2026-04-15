@@ -205,6 +205,10 @@
     border-radius: 20px; padding: 4px 12px 4px 8px;
     font-family: var(--mono); font-size: 11px; color: var(--text2);
     cursor: pointer; transition: all 0.15s;
+    max-width: 200px; overflow: hidden;
+  }
+  #statusText {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .h-status:active { background: var(--surface3); }
   .h-dot {
@@ -905,8 +909,7 @@
     });
     socket.on('status',({connected:c,message,agentType,agentAvail,claudeAvail})=>{
       connected=c; hideSplash();
-      setStatus(c?'on':'err',c?'online':'offline');
-      addMsg('system',message);
+      setStatus(c?'on':'err',c?message:'offline');
       if(c){
         document.getElementById('sendBtn').disabled=false;
         if(agentType)setAgentUI(agentType);
@@ -1295,7 +1298,14 @@
   function setStatus(state,text){
     const d=document.getElementById('statusDot');
     d.className='h-dot'+(state==='on'?' on':state==='err'?' err':'');
-    document.getElementById('statusText').textContent=text;
+    // Shorten "Ready — /long/path" to just the last folder
+    let display=text;
+    const m=text.match(/Ready\s*[—–-]\s*(.+)/);
+    if(m){ const parts=m[1].replace(/\/$/,'').split('/'); display=parts[parts.length-1]||m[1]; }
+    else if(text.includes('Reconnected'))display='connected';
+    else if(text.includes('catching up'))display='syncing...';
+    document.getElementById('statusText').textContent=display;
+    document.getElementById('statusText').title=text; // full text on hover/long-press
   }
   function onKey(e){const mob=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);if(!mob&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}
   function resizeTA(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px';}
