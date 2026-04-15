@@ -116,6 +116,40 @@ if ! command -v curl &>/dev/null; then
   esac
 fi
 
+# ── Install build tools (required for node-pty) ──────────
+if ! command -v make &>/dev/null || ! command -v gcc &>/dev/null; then
+  info "Installing build tools (make, gcc, g++) for node-pty..."
+  SUDO=""
+  [ "$(id -u)" -ne 0 ] && SUDO="sudo"
+  case $PKG_MANAGER in
+    apt)    $SUDO apt-get update -qq && $SUDO apt-get install -y make gcc g++ ;;
+    yum)    $SUDO yum groupinstall -y "Development Tools" ;;
+    dnf)    $SUDO dnf groupinstall -y "Development Tools" ;;
+    pacman) $SUDO pacman -Sy --noconfirm base-devel ;;
+    brew)   xcode-select --install 2>/dev/null || true ;;
+  esac
+  ok "Build tools installed"
+else
+  ok "Build tools available"
+fi
+
+# ── Install screen if missing ────────────────────────────
+if ! command -v screen &>/dev/null; then
+  info "Installing screen..."
+  SUDO=""
+  [ "$(id -u)" -ne 0 ] && SUDO="sudo"
+  case $PKG_MANAGER in
+    apt)    $SUDO apt-get update -qq && $SUDO apt-get install -y screen ;;
+    yum)    $SUDO yum install -y screen ;;
+    dnf)    $SUDO dnf install -y screen ;;
+    pacman) $SUDO pacman -Sy --noconfirm screen ;;
+    brew)   brew install screen ;;
+  esac
+  ok "screen installed"
+else
+  ok "screen already installed"
+fi
+
 # ── Install Node.js ───────────────────────────────────────
 if ! command -v node &>/dev/null; then
   info "Installing Node.js..."
