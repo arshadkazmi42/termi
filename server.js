@@ -215,14 +215,16 @@ function runClaudeCode(message, onChunk) {
       error += data.toString();
     });
 
-    proc.on('close', () => {
+    proc.on('close', (code) => {
+      console.log('[claude] closed, code:', code, 'stdout:', output.length, 'stderr:', error.length);
       agentRunning = false;
       if (output) resolve(output);
-      else if (error) resolve(`STDERR: ${error}`);
+      else if (error) resolve(error);
       else resolve('Claude completed with no output.');
     });
 
     proc.on('error', (err) => {
+      console.log('[claude] error:', err.message);
       agentRunning = false;
       reject(err);
     });

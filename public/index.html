@@ -776,6 +776,8 @@ body { background: #080808; }
   let thinkingEl = null;
   let activeAgent = 'agent'; // 'agent' | 'claude'
 
+  let lastThinkingContent = '';
+
   // Screen session state
   let screenTerm = null;
   let screenFitAddon = null;
@@ -822,15 +824,19 @@ body { background: #080808; }
 
     socket.on('response', ({ type, content }) => {
       if (type === 'thinking') {
+        lastThinkingContent = content || '';
         if (thinkingEl) {
-          thinkingEl.querySelector('.msg-bubble').textContent = content || '';
+          thinkingEl.querySelector('.msg-bubble').textContent = lastThinkingContent;
         } else {
           thinkingEl = addMsg('thinking', '');
           thinkingEl.querySelector('.msg-bubble').innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
         }
       } else {
+        // Use thinking content as fallback if final content is empty
+        const finalContent = (content && content.trim()) ? content : lastThinkingContent;
         if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
-        addMsg(type, content);
+        lastThinkingContent = '';
+        if (finalContent) addMsg(type, finalContent);
       }
     });
 
