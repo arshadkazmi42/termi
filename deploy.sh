@@ -326,6 +326,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cp "$SCRIPT_DIR/server.js" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/package.json" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/public/index.html" "$INSTALL_DIR/public/"
+cp "$SCRIPT_DIR/public/manifest.json" "$INSTALL_DIR/public/" 2>/dev/null || true
+cp "$SCRIPT_DIR/public/sw.js" "$INSTALL_DIR/public/" 2>/dev/null || true
 ok "Files copied to $INSTALL_DIR"
 
 # ── Install npm dependencies ──────────────────────────────
