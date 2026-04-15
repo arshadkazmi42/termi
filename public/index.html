@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0a0a0a">
+<meta name="theme-color" content="#0d0d0d">
 <link rel="manifest" href="/manifest.json">
 <title>termi</title>
 <script src="/socket.io/socket.io.js"></script>
@@ -14,515 +14,751 @@
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:       #0a0a0a;
-    --surface:  #111;
-    --surface2: #181818;
-    --border:   #222;
-    --green:    #00e676;
-    --green-dim:#00e67618;
-    --green-glow:#00e67640;
-    --blue:     #5cb8ff;
-    --red:      #ff5252;
-    --orange:   #ffab40;
-    --yellow:   #ffd740;
-    --cyan:     #18ffff;
-    --magenta:  #ea80fc;
-    --text:     #ccc;
-    --dim:      #555;
-    --font:     'IBM Plex Mono', 'SF Mono', 'Menlo', monospace;
-    --safe-b:   env(safe-area-inset-bottom, 0px);
-    --safe-t:   env(safe-area-inset-top, 0px);
+    --bg:        #0a0a0a;
+    --surface:   #141414;
+    --surface2:  #1c1c1c;
+    --surface3:  #252525;
+    --border:    #2a2a2a;
+    --border-light: #333;
+    --accent:    #00e676;
+    --accent-dim:#00e67615;
+    --accent-glow: #00e67640;
+    --blue:      #448aff;
+    --blue-dim:  #448aff15;
+    --red:       #ff5252;
+    --orange:    #ff9800;
+    --purple:    #bb86fc;
+    --text:      #ececec;
+    --text-secondary: #999;
+    --muted:     #555;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'Space Grotesk', sans-serif;
+    --radius:    16px;
+    --radius-sm: 10px;
+    --radius-lg: 20px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top:    env(safe-area-inset-top, 0px);
+    --transition: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-  html, body {
-    height: 100%; height: 100dvh;
-    background: var(--bg); color: var(--text);
-    font-family: var(--font); font-size: 13px;
-    overflow: hidden; -webkit-font-smoothing: antialiased;
-    touch-action: manipulation;
-  }
+html, body {
+  height: 100%; height: 100dvh;
+  background: var(--bg); color: var(--text);
+  font-family: var(--sans); overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
+}
 
-  /* Everything is monospace terminal */
+/* ── Splash Screen ──────────────────────────────── */
+#splash {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 20px;
+  transition: opacity 0.5s ease;
+}
+#splash.hidden { opacity: 0; pointer-events: none; }
+.splash-logo {
+  width: 72px; height: 72px; background: var(--accent);
+  border-radius: 18px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-weight: 600; font-size: 30px; color: #000;
+  box-shadow: 0 0 40px var(--accent-glow), 0 0 80px var(--accent-dim);
+  animation: splashPulse 2s ease-in-out infinite;
+}
+.splash-sub {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.splash-name { font-family: var(--mono); font-size: 18px; font-weight: 600; letter-spacing: 2px; }
+.splash-text { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.splash-dots { display: flex; gap: 4px; }
+.splash-dots span {
+  width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
+  animation: splashDot 1.4s infinite;
+}
+.splash-dots span:nth-child(2) { animation-delay: 0.2s; }
+.splash-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes splashPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 40px var(--accent-glow), 0 0 80px var(--accent-dim); }
+  50% { transform: scale(1.04); box-shadow: 0 0 60px var(--accent-glow), 0 0 120px var(--accent-dim); }
+}
+@keyframes splashDot {
+  0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.2); }
+}
 
-  /* ── Splash ─────────────────────────────────────── */
-  #splash {
-    position: fixed; inset: 0; z-index: 200; background: var(--bg);
-    display: flex; align-items: center; justify-content: center;
-    flex-direction: column; gap: 12px; transition: opacity 0.4s;
-  }
-  #splash.hidden { opacity: 0; pointer-events: none; }
-  .splash-text { color: var(--green); font-size: 14px; }
-  .splash-cursor {
-    display: inline-block; width: 8px; height: 15px;
-    background: var(--green); margin-left: 2px;
-    animation: blink 1s step-end infinite;
-  }
-  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-  .splash-sub { color: var(--dim); font-size: 11px; margin-top: 4px; }
+/* ── Toast Notification ─────────────────────────── */
+#toast {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+  z-index: 160; padding: 10px 20px;
+  background: var(--surface3); border: 1px solid var(--border-light);
+  border-radius: 24px; font-family: var(--mono); font-size: 12px;
+  color: var(--text); opacity: 0; pointer-events: none;
+  transition: all 0.3s var(--transition);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  white-space: nowrap;
+}
+#toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ── Toast ──────────────────────────────────────── */
-  #toast {
-    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(10px);
-    z-index: 160; padding: 6px 16px;
-    background: var(--surface2); border: 1px solid var(--green);
-    font-size: 11px; color: var(--green); opacity: 0; pointer-events: none;
-    transition: all 0.2s; white-space: nowrap;
-  }
-  #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* ── Reconnection Banner ────────────────────────── */
+#reconnectBanner {
+  position: fixed; top: 0; left: 0; right: 0;
+  z-index: 150; padding: 10px 16px;
+  padding-top: calc(10px + var(--safe-top));
+  background: linear-gradient(135deg, #ff5252, #ff1744);
+  color: #fff; font-family: var(--mono); font-size: 12px;
+  text-align: center; display: none;
+  animation: slideDown 0.3s var(--transition);
+  box-shadow: 0 4px 20px rgba(255,82,82,0.3);
+}
+#reconnectBanner.visible { display: block; }
+@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
 
-  /* ── Reconnect Banner ───────────────────────────── */
-  #reconnectBanner {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 150;
-    padding: 6px 12px; padding-top: calc(6px + var(--safe-t));
-    background: var(--red); color: #000; font-size: 11px; font-weight: 600;
-    text-align: center; display: none;
-  }
-  #reconnectBanner.visible { display: block; }
+/* ── Auth Screen ────────────────────────────────── */
+#auth {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 24px;
+}
+.auth-card { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 28px; }
+.auth-logo { display: flex; align-items: center; gap: 12px; }
+.auth-logo-icon {
+  width: 48px; height: 48px; background: var(--accent); border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-weight: 600; font-size: 22px; color: #000;
+  box-shadow: 0 0 30px var(--accent-glow);
+}
+.auth-logo-text { font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -0.5px; }
+.auth-logo-text span { color: var(--accent); }
+.auth-subtitle { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+.auth-field { display: flex; flex-direction: column; gap: 8px; }
+.auth-label { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); font-family: var(--mono); }
+.auth-input {
+  background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); font-family: var(--mono); font-size: 15px; padding: 14px 16px;
+  outline: none; width: 100%; transition: all 0.2s var(--transition); -webkit-appearance: none;
+}
+.auth-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.auth-btn {
+  background: var(--accent); color: #000; border: none; border-radius: var(--radius-sm);
+  padding: 15px; font-family: var(--sans); font-size: 15px; font-weight: 700;
+  cursor: pointer; width: 100%; transition: all 0.2s; letter-spacing: 0.3px;
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+.auth-btn:active { transform: scale(0.98); opacity: 0.9; }
+.auth-error { font-size: 12px; color: var(--red); font-family: var(--mono); min-height: 16px; }
 
-  /* ── Auth ────────────────────────────────────────── */
-  #auth {
-    position: fixed; inset: 0; background: var(--bg);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 100; padding: 20px;
-  }
-  .auth-box { width: 100%; max-width: 400px; }
-  .auth-line { margin-bottom: 6px; line-height: 1.8; }
-  .auth-line .g { color: var(--green); }
-  .auth-line .d { color: var(--dim); }
-  .auth-line .b { color: var(--blue); }
-  .auth-line .r { color: var(--red); }
-  .auth-input {
-    background: transparent; border: none; border-bottom: 1px solid var(--green);
-    color: var(--green); font-family: var(--font); font-size: 14px;
-    padding: 6px 0; outline: none; width: 100%; margin: 8px 0;
-    caret-color: var(--green);
-  }
-  .auth-input::placeholder { color: var(--dim); }
-  .auth-submit {
-    background: none; border: 1px solid var(--green); color: var(--green);
-    font-family: var(--font); font-size: 12px; padding: 8px 20px;
-    cursor: pointer; margin-top: 8px; transition: all 0.15s;
-  }
-  .auth-submit:active { background: var(--green); color: #000; }
-  .auth-error { color: var(--red); font-size: 11px; margin-top: 6px; min-height: 16px; }
+/* ── App Layout ─────────────────────────────────── */
+#app {
+  display: flex; flex-direction: column;
+  height: 100%; height: 100dvh;
+  max-width: 800px; margin: 0 auto;
+}
 
-  /* ── App Layout ─────────────────────────────────── */
-  #app {
-    display: flex; flex-direction: column;
-    height: 100%; height: 100dvh;
-    max-width: 800px; margin: 0 auto;
-  }
+/* ── Header ─────────────────────────────────────── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; padding-top: calc(10px + var(--safe-top));
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; gap: 10px;
+}
+.header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.logo-icon {
+  width: 34px; height: 34px; background: var(--accent); border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-weight: 600; font-size: 14px; color: #000; flex-shrink: 0;
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+.logo-name { font-family: var(--mono); font-size: 16px; font-weight: 600; letter-spacing: -0.3px; }
 
-  /* ── Top Bar (terminal title bar style) ──────────── */
-  .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 12px; padding-top: calc(8px + var(--safe-t));
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    flex-shrink: 0; gap: 8px; font-size: 11px;
-  }
-  .topbar-title { color: var(--dim); }
-  .topbar-title .g { color: var(--green); }
-  .topbar-status {
-    display: flex; align-items: center; gap: 6px; color: var(--dim);
-    cursor: pointer;
-  }
-  .topbar-status:active { opacity: 0.6; }
-  .topbar-dot {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--dim);
-  }
-  .topbar-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .topbar-dot.err { background: var(--red); box-shadow: 0 0 6px var(--red); }
-  .topbar-actions { display: flex; gap: 4px; }
-  .topbar-btn {
-    background: none; border: 1px solid var(--border); color: var(--dim);
-    font-family: var(--font); font-size: 10px; padding: 3px 8px;
-    cursor: pointer; transition: all 0.1s;
-  }
-  .topbar-btn:active { background: var(--surface2); color: var(--text); }
-  .topbar-btn.active { border-color: var(--green); color: var(--green); }
+.status-pill {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 5px 12px;
+  font-size: 11px; font-family: var(--mono); color: var(--text-secondary); white-space: nowrap;
+  cursor: pointer; transition: all 0.2s var(--transition);
+}
+.status-pill:active { background: var(--surface3); transform: scale(0.97); }
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+  flex-shrink: 0; transition: all 0.3s;
+}
+.status-dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2s infinite; }
+.status-dot.err { background: var(--red); box-shadow: 0 0 8px var(--red); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.latency { font-size: 10px; color: var(--muted); }
 
-  /* ── Tab Bar ────────────────────────────────────── */
-  .tabbar {
-    display: flex; background: var(--bg); border-bottom: 1px solid var(--border);
-    flex-shrink: 0; font-size: 12px;
-  }
-  .tab {
-    flex: 1; padding: 8px 12px; text-align: center; cursor: pointer;
-    color: var(--dim); border-bottom: 2px solid transparent;
-    background: none; border-top: none; border-left: none; border-right: none;
-    font-family: var(--font); font-size: 12px; transition: all 0.15s;
-    position: relative;
-  }
-  .tab.active { color: var(--green); border-bottom-color: var(--green); }
-  .tab:active { opacity: 0.7; }
-  .tab-badge {
-    position: absolute; top: 4px; right: calc(50% - 30px);
-    width: 5px; height: 5px; border-radius: 50%; background: var(--orange);
-    display: none;
-  }
-  .tab-badge.visible { display: block; }
+.header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.icon-btn {
+  width: 34px; height: 34px; border-radius: 9px; background: var(--surface2);
+  border: 1px solid var(--border); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 15px; transition: all 0.15s var(--transition); flex-shrink: 0;
+}
+.icon-btn:active { background: var(--surface3); transform: scale(0.9); }
+.icon-btn.danger { color: var(--red); }
 
-  /* Agent toggle in tabbar */
-  .agent-toggle {
-    display: flex; align-items: center; gap: 2px;
-    margin-left: auto; padding: 0 10px; flex-shrink: 0;
-  }
-  .agent-btn {
-    background: none; border: 1px solid var(--border); color: var(--dim);
-    font-family: var(--font); font-size: 10px; padding: 3px 10px;
-    cursor: pointer; transition: all 0.15s;
-  }
-  .agent-btn:first-child { border-right: none; }
-  .agent-btn.active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
-  .agent-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+/* ── Header Menu ─────────────────────────────────── */
+.header-menu {
+  position: relative; display: inline-block;
+}
+.menu-dropdown {
+  display: none; position: absolute; right: 0; top: calc(100% + 6px);
+  background: var(--surface2); border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); overflow: hidden; z-index: 80;
+  min-width: 180px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  animation: menuIn 0.15s var(--transition);
+}
+.menu-dropdown.open { display: block; }
+@keyframes menuIn { from { opacity: 0; transform: translateY(-8px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.menu-item {
+  padding: 12px 16px; font-family: var(--mono); font-size: 12px;
+  color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 10px;
+  transition: background 0.1s;
+  border: none; background: none; width: 100%; text-align: left;
+}
+.menu-item:active { background: var(--surface3); }
+.menu-item.danger { color: var(--red); }
+.menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
 
-  /* ── Queue Banner ───────────────────────────────── */
-  .queue-bar {
-    padding: 4px 12px; background: var(--green-dim); border-bottom: 1px solid var(--border);
-    font-size: 11px; color: var(--green); display: none;
-  }
-  .queue-bar.visible { display: block; }
+/* ── Tab Bar ────────────────────────────────────── */
+.tab-bar {
+  display: flex; background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; padding: 0 16px; gap: 2px;
+}
+.tab-btn {
+  flex: 0 0 auto; padding: 11px 16px;
+  font-size: 13px; font-family: var(--mono); font-weight: 500;
+  color: var(--muted); background: none; border: none;
+  border-bottom: 2.5px solid transparent;
+  cursor: pointer; transition: all 0.2s var(--transition); text-align: center;
+  display: flex; align-items: center; gap: 6px; position: relative;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:active { opacity: 0.7; }
+.tab-icon { font-size: 14px; }
+.tab-badge {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--orange);
+  position: absolute; top: 8px; right: 8px; display: none;
+}
+.tab-badge.visible { display: block; }
 
-  /* ── Messages (terminal output style) ───────────── */
-  #messages {
-    flex: 1; overflow-y: auto; overflow-x: hidden;
-    padding: 12px; display: flex; flex-direction: column; gap: 2px;
-    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-    background: var(--bg);
-  }
-  #messages::-webkit-scrollbar { width: 3px; }
-  #messages::-webkit-scrollbar-thumb { background: var(--border); }
+.agent-toggle {
+  margin-left: auto; display: flex; align-items: center;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 2px; gap: 2px; align-self: center;
+}
+.agent-opt {
+  padding: 5px 12px; font-size: 11px; font-family: var(--mono);
+  color: var(--muted); background: none; border: none; border-radius: 16px;
+  cursor: pointer; transition: all 0.2s var(--transition); white-space: nowrap;
+}
+.agent-opt.active { background: var(--accent); color: #000; font-weight: 600; }
+.agent-opt:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  /* Terminal-style messages */
-  .line {
-    line-height: 1.7; word-break: break-word; white-space: pre-wrap;
-    animation: lineIn 0.15s ease;
-  }
-  @keyframes lineIn { from { opacity: 0; } to { opacity: 1; } }
+/* ── Queue Banner ───────────────────────────────── */
+.queue-banner {
+  flex-shrink: 0; padding: 8px 16px; background: var(--accent-dim);
+  border-bottom: 1px solid var(--accent-glow); display: none;
+  font-family: var(--mono); font-size: 11px; color: var(--accent);
+  align-items: center; gap: 8px;
+}
+.queue-banner.visible { display: flex; }
+.queue-count {
+  background: var(--accent); color: #000; border-radius: 10px;
+  padding: 1px 7px; font-weight: 700; font-size: 10px;
+}
 
-  .line.input { color: var(--green); }
-  .line.input .prompt { color: var(--green); opacity: 0.6; }
-  .line.output { color: var(--text); padding-left: 4px; }
-  .line.output.long { max-height: 200px; overflow: hidden; position: relative; }
-  .line.output.long::after {
-    content: ''; position: absolute; bottom: 0; left: 0; right: 0;
-    height: 40px; background: linear-gradient(transparent, var(--bg));
-  }
-  .line.error { color: var(--red); padding-left: 4px; }
-  .line.system { color: var(--dim); font-style: italic; padding-left: 4px; }
-  .line.thinking { color: var(--dim); padding-left: 4px; }
-  .line .ts { color: var(--dim); font-size: 10px; margin-left: 8px; opacity: 0.5; }
+/* ── Welcome Card (empty state) ─────────────────── */
+.welcome-card {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; flex: 1; gap: 16px; padding: 40px 24px;
+  text-align: center;
+}
+.welcome-icon {
+  width: 56px; height: 56px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+}
+.welcome-title { font-family: var(--sans); font-size: 18px; font-weight: 600; }
+.welcome-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.6; max-width: 280px; }
+.welcome-actions {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px;
+}
+.welcome-action {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 16px; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; color: var(--text-secondary);
+  transition: all 0.15s var(--transition); display: flex; align-items: center; gap: 6px;
+}
+.welcome-action:active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); transform: scale(0.96); }
+.welcome-action-icon { font-size: 14px; }
 
-  .line-expand {
-    color: var(--blue); cursor: pointer; font-size: 11px;
-    padding-left: 4px; margin: 2px 0;
-  }
-  .line-expand:active { color: var(--green); }
+/* ── Messages ───────────────────────────────────── */
+#messages {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 16px; display: flex; flex-direction: column; gap: 14px;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
+#messages::-webkit-scrollbar { width: 3px; }
+#messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-  .line-copy {
-    color: var(--dim); cursor: pointer; font-size: 10px;
-    display: inline; margin-left: 8px;
-  }
-  .line-copy:active { color: var(--green); }
+.msg {
+  display: flex; flex-direction: column; gap: 4px; max-width: 88%;
+  animation: msgIn 0.25s var(--transition);
+}
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
-  /* Typing cursor animation */
-  .cursor-blink {
-    display: inline-block; width: 7px; height: 13px;
-    background: var(--green); animation: blink 1s step-end infinite;
-    vertical-align: middle; margin-left: 2px;
-  }
+.msg.you { align-self: flex-end; align-items: flex-end; }
+.msg.agent, .msg.cmd, .msg.system, .msg.error { align-self: flex-start; align-items: flex-start; }
 
-  /* Welcome */
-  .welcome {
-    color: var(--dim); padding: 8px 0; line-height: 1.8;
-  }
-  .welcome .g { color: var(--green); }
-  .welcome .b { color: var(--blue); }
-  .welcome .y { color: var(--yellow); }
-  .welcome-cmds {
-    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
-  }
-  .welcome-cmd {
-    background: none; border: 1px solid var(--border); color: var(--dim);
-    font-family: var(--font); font-size: 11px; padding: 5px 12px;
-    cursor: pointer; transition: all 0.15s;
-  }
-  .welcome-cmd:active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+/* Agent avatar row */
+.msg-row { display: flex; align-items: flex-start; gap: 8px; }
+.msg-avatar {
+  width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  margin-top: 2px;
+}
+.msg-avatar.agent-av { background: var(--accent); color: #000; }
+.msg-avatar.you-av { background: var(--blue); color: #fff; }
 
-  /* ── Quick Commands ─────────────────────────────── */
-  .quickbar {
-    flex-shrink: 0; padding: 6px 12px;
-    overflow-x: auto; display: flex; gap: 6px;
-    -webkit-overflow-scrolling: touch; scrollbar-width: none;
-    border-top: 1px solid var(--border); background: var(--surface);
-  }
-  .quickbar::-webkit-scrollbar { display: none; }
-  .qcmd {
-    flex-shrink: 0; background: none; border: 1px solid var(--border);
-    color: var(--dim); font-family: var(--font); font-size: 11px;
-    padding: 5px 10px; cursor: pointer; white-space: nowrap; transition: all 0.15s;
-  }
-  .qcmd:active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+.msg-content { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
 
-  /* ── Input Area (terminal prompt style) ──────────── */
-  .prompt-area {
-    flex-shrink: 0; padding: 8px 12px;
-    padding-bottom: calc(8px + var(--safe-b));
-    background: var(--surface); border-top: 1px solid var(--border);
-    display: flex; align-items: flex-end; gap: 8px;
-  }
-  .prompt-symbol { color: var(--green); font-size: 14px; padding-bottom: 4px; flex-shrink: 0; }
-  .prompt-input {
-    flex: 1; background: transparent; border: none; outline: none;
-    color: var(--green); font-family: var(--font); font-size: 14px;
-    line-height: 1.4; resize: none; max-height: 100px; min-height: 20px;
-    -webkit-appearance: none; caret-color: var(--green);
-  }
-  .prompt-input::placeholder { color: var(--dim); }
-  .prompt-send {
-    background: var(--green); color: #000; border: none;
-    width: 32px; height: 32px; font-size: 14px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; transition: all 0.1s; font-family: var(--font); font-weight: 600;
-  }
-  .prompt-send:active { opacity: 0.7; }
-  .prompt-send:disabled { background: var(--border); color: var(--dim); }
+.msg-bubble {
+  padding: 10px 14px; border-radius: var(--radius);
+  font-size: 14px; line-height: 1.6; word-break: break-word; white-space: pre-wrap;
+  position: relative;
+}
 
-  /* ── Screen Sessions (terminal ls style) ─────────── */
-  #screenView { display: none; flex-direction: column; flex: 1; min-height: 0; }
-  #screenView.active { display: flex; }
+.msg.you .msg-bubble {
+  background: linear-gradient(135deg, #448aff, #2979ff);
+  color: #fff; border-bottom-right-radius: 4px;
+  box-shadow: 0 2px 12px rgba(68,138,255,0.2);
+}
+.msg.agent .msg-bubble {
+  background: var(--surface2); color: var(--text); border-bottom-left-radius: 4px;
+  font-family: var(--mono); font-size: 13px; border: 1px solid var(--border);
+}
+.msg.agent .msg-bubble:hover .copy-btn { opacity: 1; }
 
-  .screen-term-list {
-    flex: 1; overflow-y: auto; padding: 12px;
-    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-    background: var(--bg); font-size: 12px; line-height: 1.6;
-  }
-  .screen-term-list::-webkit-scrollbar { width: 3px; }
-  .screen-term-list::-webkit-scrollbar-thumb { background: var(--border); }
+.msg.cmd .msg-bubble {
+  background: var(--surface2); color: #b0e0ff; border-bottom-left-radius: 4px;
+  font-family: var(--mono); font-size: 12px; border: 1px solid var(--blue-dim);
+}
+.msg.system .msg-bubble {
+  background: transparent; color: var(--muted); font-size: 12px;
+  font-family: var(--mono); text-align: center;
+  border: 1px dashed var(--border); border-radius: 20px; padding: 6px 16px;
+}
+.msg.error .msg-bubble {
+  background: rgba(255,82,82,0.08); color: var(--red);
+  border: 1px solid rgba(255,82,82,0.15); font-family: var(--mono); font-size: 13px;
+  border-bottom-left-radius: 4px;
+}
 
-  .stl-header { color: var(--dim); margin-bottom: 4px; }
-  .stl-header .g { color: var(--green); }
-  .stl-divider { color: var(--border); margin: 4px 0; }
+/* Thinking bubble with animated border */
+.msg.thinking .msg-bubble {
+  background: var(--surface2); color: var(--muted);
+  font-family: var(--mono); font-size: 13px; border-bottom-left-radius: 4px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+}
+.msg.thinking .msg-bubble::before {
+  content: ''; position: absolute; inset: -1px; border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--blue), var(--purple), var(--accent));
+  background-size: 300% 100%; z-index: -1;
+  animation: shimmer 2s linear infinite;
+}
+@keyframes shimmer { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
 
-  .stl-row {
-    padding: 8px 6px; cursor: pointer; display: flex; align-items: center;
-    gap: 8px; transition: background 0.1s; border-left: 2px solid transparent;
-    margin: 1px 0;
-  }
-  .stl-row:active { background: var(--surface2); }
-  .stl-row.attached { border-left-color: var(--green); }
-  .stl-row.detached { border-left-color: var(--orange); }
+/* Copy button */
+.copy-btn {
+  position: absolute; top: 6px; right: 6px;
+  background: var(--surface3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 8px; cursor: pointer;
+  font-family: var(--mono); font-size: 10px; color: var(--text-secondary);
+  opacity: 0; transition: opacity 0.15s;
+}
+.copy-btn:active { background: var(--accent); color: #000; }
 
-  .stl-status { font-size: 10px; width: 12px; text-align: center; }
-  .stl-status.live { color: var(--green); }
-  .stl-status.idle { color: var(--orange); }
+/* Collapsible long messages */
+.msg-bubble.collapsed { max-height: 200px; overflow: hidden; }
+.msg-bubble.collapsed::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
+  background: linear-gradient(transparent, var(--surface2));
+  pointer-events: none;
+}
+.show-more-btn {
+  background: var(--surface3); border: 1px solid var(--border);
+  border-radius: 16px; padding: 4px 12px; cursor: pointer;
+  font-family: var(--mono); font-size: 11px; color: var(--accent);
+  align-self: flex-start; margin-top: 4px;
+  transition: all 0.15s;
+}
+.show-more-btn:active { background: var(--accent-dim); }
 
-  .stl-name { color: var(--text); font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .stl-pid { color: var(--dim); font-size: 10px; }
-  .stl-arrow { color: var(--dim); font-size: 11px; }
-  .stl-row:active .stl-arrow { color: var(--green); }
+.msg-time { font-size: 10px; color: var(--muted); font-family: var(--mono); padding: 0 4px; }
 
-  .stl-empty { color: var(--dim); padding: 20px 0; text-align: center; }
-  .stl-empty .g { color: var(--green); }
+/* Typing indicator */
+.typing-dots { display: inline-flex; gap: 4px; align-items: center; padding: 4px 0; }
+.typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: typing 1.4s infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
 
-  .stl-actions {
-    display: flex; gap: 6px; margin-top: 8px; padding-top: 8px;
-    border-top: 1px solid var(--border);
-  }
-  .stl-action {
-    background: none; border: 1px solid var(--border); color: var(--dim);
-    font-family: var(--font); font-size: 11px; padding: 5px 12px;
-    cursor: pointer; transition: all 0.15s;
-  }
-  .stl-action:active { border-color: var(--green); color: var(--green); }
+/* ── Quick Commands ─────────────────────────────── */
+.quick-row {
+  flex-shrink: 0; padding: 8px 16px 6px;
+  overflow-x: auto; display: flex; gap: 8px;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.quick-row::-webkit-scrollbar { display: none; }
+.quick-chip {
+  flex-shrink: 0; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 8px 14px; font-size: 12px;
+  font-family: var(--mono); color: var(--text-secondary); cursor: pointer;
+  white-space: nowrap; transition: all 0.15s var(--transition);
+}
+.quick-chip:active {
+  background: var(--accent-dim); border-color: var(--accent);
+  color: var(--accent); transform: scale(0.95);
+}
 
-  /* Screen terminal view — full screen overlay */
-  #screenTermView {
-    display: none; position: fixed; inset: 0; z-index: 50;
-    flex-direction: column; background: var(--bg);
-  }
-  #screenTermView.active { display: flex; }
+/* ── Input Area ─────────────────────────────────── */
+.input-area {
+  flex-shrink: 0; padding: 8px 16px;
+  padding-bottom: calc(10px + var(--safe-bottom));
+  background: var(--surface); border-top: 1px solid var(--border);
+  display: flex; align-items: flex-end; gap: 10px;
+}
+.input-wrap {
+  flex: 1; background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 22px; display: flex; align-items: flex-end;
+  padding: 10px 16px; transition: all 0.2s var(--transition); min-height: 44px;
+}
+.input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+textarea {
+  flex: 1; background: none; border: none; outline: none; color: var(--text);
+  font-family: var(--sans); font-size: 15px; line-height: 1.4;
+  resize: none; max-height: 100px; min-height: 22px; -webkit-appearance: none;
+}
+textarea::placeholder { color: var(--muted); }
+.send-btn {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(135deg, #00e676, #00c853);
+  border: none; color: #000; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all 0.15s var(--transition);
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+.send-btn:active { transform: scale(0.9); }
+.send-btn:disabled { background: var(--surface3); color: var(--muted); box-shadow: none; }
 
-  .screen-hdr {
-    display: flex; align-items: center; gap: 8px;
-    padding: 6px 12px; padding-top: calc(6px + var(--safe-t));
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    flex-shrink: 0; font-size: 11px;
-  }
-  .screen-hdr-back {
-    background: none; border: 1px solid var(--border); color: var(--green);
-    font-family: var(--font); font-size: 11px; padding: 4px 10px;
-    cursor: pointer; transition: all 0.1s;
-  }
-  .screen-hdr-back:active { background: var(--green); color: #000; }
-  .screen-hdr-name { color: var(--text); font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .screen-hdr-status { font-size: 10px; }
-  .screen-hdr-status.live { color: var(--green); }
-  .screen-hdr-status.idle { color: var(--orange); }
+/* ── Screen Sessions ────────────────────────────── */
+#screenView { display: none; flex-direction: column; flex: 1; min-height: 0; }
+#screenView.active { display: flex; }
 
-  #screenTermContainer { flex: 1; min-height: 0; padding: 2px; background: var(--bg); overflow: hidden; }
+.screen-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 16px 8px; flex-shrink: 0;
+}
+.screen-header-left { display: flex; align-items: center; gap: 8px; }
+.screen-header-title { font-family: var(--sans); font-size: 16px; font-weight: 600; }
+.screen-header-count {
+  background: var(--surface3); border: 1px solid var(--border);
+  border-radius: 12px; padding: 2px 8px; font-family: var(--mono);
+  font-size: 11px; color: var(--text-secondary);
+}
+.screen-refresh-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  font-family: var(--mono); font-size: 14px; color: var(--text-secondary);
+  transition: all 0.15s var(--transition);
+}
+.screen-refresh-btn:active { transform: scale(0.9) rotate(90deg); color: var(--accent); }
+.screen-refresh-btn.spinning { animation: spin 0.6s linear; }
+@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 
-  /* ── Menu Dropdown ──────────────────────────────── */
-  .menu-wrap { position: relative; }
-  .menu-drop {
-    display: none; position: absolute; right: 0; top: calc(100% + 4px);
-    background: var(--surface); border: 1px solid var(--border);
-    z-index: 80; min-width: 160px; font-size: 11px;
-  }
-  .menu-drop.open { display: block; }
-  .menu-item {
-    padding: 8px 12px; color: var(--dim); cursor: pointer;
-    background: none; border: none; width: 100%; text-align: left;
-    font-family: var(--font); font-size: 11px; transition: background 0.1s;
-  }
-  .menu-item:active { background: var(--surface2); color: var(--text); }
-  .menu-item.danger { color: var(--red); }
-  .menu-sep { height: 1px; background: var(--border); }
+/* Pull-to-refresh */
+.ptr-indicator {
+  text-align: center; overflow: hidden;
+  height: 0; transition: height 0.2s; flex-shrink: 0;
+  font-family: var(--mono); font-size: 12px; color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.ptr-indicator.pulling { height: 40px; }
+.ptr-indicator.refreshing { height: 40px; }
 
-  /* ── Desktop ────────────────────────────────────── */
-  @media (min-width: 600px) {
-    #app { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
-    .topbar { padding: 10px 16px; }
-    #messages { padding: 16px; }
-    .prompt-area { padding: 10px 16px; }
-  }
-  @media (min-width: 900px) {
-    body { background: #050505; }
-    #app { max-width: 720px; }
-  }
+#screenSessionList {
+  flex: 1; overflow-y: auto; padding: 8px 16px 16px; display: flex;
+  flex-direction: column; gap: 10px; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+#screenSessionList::-webkit-scrollbar { width: 3px; }
+#screenSessionList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.screen-empty {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; flex: 1; gap: 16px; color: var(--muted);
+  font-family: var(--mono); font-size: 13px; text-align: center; padding: 40px 20px;
+}
+.screen-empty-icon {
+  width: 64px; height: 64px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: var(--muted);
+}
+.screen-empty-hint {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 14px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.screen-empty-hint code {
+  color: var(--accent); background: var(--accent-dim);
+  padding: 2px 6px; border-radius: 4px;
+}
+
+.screen-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px; cursor: pointer;
+  transition: all 0.2s var(--transition); display: flex; align-items: center; gap: 12px;
+  animation: msgIn 0.25s var(--transition);
+  position: relative; overflow: hidden;
+}
+.screen-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+}
+.screen-card.attached-card::before { background: var(--accent); }
+.screen-card.detached-card::before { background: var(--orange); }
+.screen-card:active { background: var(--surface2); transform: scale(0.98); }
+
+.screen-icon {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.screen-icon.attached-icon { background: var(--accent-dim); color: var(--accent); }
+.screen-icon.detached-icon { background: rgba(255,152,0,0.1); color: var(--orange); }
+
+.screen-info { flex: 1; min-width: 0; }
+.screen-name { font-family: var(--mono); font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.screen-meta {
+  font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 4px;
+  display: flex; align-items: center; gap: 8px;
+}
+.screen-status-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;
+}
+.screen-status-badge.live { background: var(--accent-dim); color: var(--accent); }
+.screen-status-badge.idle { background: rgba(255,152,0,0.1); color: var(--orange); }
+
+.screen-arrow {
+  color: var(--muted); font-size: 18px; flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.screen-card:active .screen-arrow { transform: translateX(3px); }
+
+/* Screen terminal view — full screen overlay */
+#screenTermView {
+  display: none; position: fixed; inset: 0; z-index: 50;
+  flex-direction: column; background: var(--bg);
+  animation: slideIn 0.2s var(--transition);
+}
+#screenTermView.active { display: flex; }
+@keyframes slideIn { from { transform: translateX(30%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.screen-term-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; padding-top: calc(10px + var(--safe-top));
+  background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.screen-back-btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--accent);
+  font-size: 14px; cursor: pointer; padding: 8px 12px; font-family: var(--mono);
+  border-radius: 8px; display: flex; align-items: center; gap: 6px;
+  font-weight: 600; white-space: nowrap; transition: all 0.15s;
+}
+.screen-back-btn:active { opacity: 0.6; transform: scale(0.95); }
+.screen-term-name {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.screen-term-status { font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+
+#screenTermContainer { flex: 1; min-height: 0; padding: 4px; background: var(--bg); overflow: hidden; }
+
+/* ── Desktop ────────────────────────────────────── */
+@media (min-width: 600px) {
+  #app { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+  header { padding: 14px 20px; }
+  #messages { padding: 20px; gap: 16px; }
+  .msg { max-width: 75%; }
+  .input-area { padding: 12px 20px; }
+  .quick-row { padding: 8px 20px 4px; }
+  .copy-btn { opacity: 0.6; }
+}
+@media (min-width: 900px) {
+  body { background: #060606; }
+  #app { max-width: 700px; }
+}
 </style>
 </head>
 <body>
 
 <!-- Splash -->
 <div id="splash">
-  <div class="splash-text">termi v1.0<span class="splash-cursor"></span></div>
-  <div class="splash-sub">establishing connection...</div>
+  <div class="splash-logo">t_</div>
+  <div class="splash-sub">
+    <div class="splash-name">TERMI</div>
+    <div class="splash-dots"><span></span><span></span><span></span></div>
+  </div>
 </div>
 
 <!-- Toast -->
 <div id="toast"></div>
 
-<!-- Reconnect Banner -->
-<div id="reconnectBanner">ERR: connection lost — reconnecting...</div>
+<!-- Reconnection Banner -->
+<div id="reconnectBanner">connection lost — reconnecting...</div>
 
-<!-- Auth (terminal login prompt) -->
+<!-- Auth -->
 <div id="auth" style="display:none">
-  <div class="auth-box">
-    <div class="auth-line"><span class="g">termi</span> v1.0</div>
-    <div class="auth-line"><span class="d">remote agent interface</span></div>
-    <div class="auth-line">&nbsp;</div>
-    <div class="auth-line"><span class="b">login:</span> enter access token to connect</div>
-    <div class="auth-line">
-      <span class="g">&gt;</span>
-      <input type="password" class="auth-input" id="tokenInput" placeholder="token_" autocomplete="current-password" />
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">t_</div>
+      <div class="auth-logo-text">ter<span>mi</span></div>
     </div>
-    <button class="auth-submit" onclick="authenticate()">[connect]</button>
-    <div class="auth-error" id="authError"></div>
+    <div class="auth-subtitle">Enter your access token to connect to the remote agent.</div>
+    <div class="auth-field">
+      <div class="auth-label">Access Token</div>
+      <input type="password" class="auth-input" id="tokenInput" placeholder="••••••••••••" autocomplete="current-password" />
+      <div class="auth-error" id="authError"></div>
+    </div>
+    <button class="auth-btn" onclick="authenticate()">Connect</button>
   </div>
 </div>
 
 <!-- App -->
 <div id="app">
-  <!-- Top Bar -->
-  <div class="topbar">
-    <div class="topbar-title"><span class="g">termi</span> ~</div>
-    <div class="topbar-status" onclick="showLatency()">
-      <span class="topbar-dot" id="statusDot"></span>
-      <span id="statusText">connecting</span>
-      <span id="latencyText" style="color:var(--dim)"></span>
+  <header>
+    <div class="header-left">
+      <div class="logo-icon">t_</div>
+      <div class="logo-name">termi</div>
     </div>
-    <div class="topbar-actions">
-      <div class="menu-wrap">
-        <button class="topbar-btn" onclick="toggleMenu()">...</button>
-        <div class="menu-drop" id="headerMenu">
-          <button class="menu-item" onclick="resetSession(); closeMenu()">reset session</button>
-          <button class="menu-item" onclick="clearHistory(); closeMenu()">clear history</button>
+    <div class="status-pill" onclick="showLatency()">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">connecting</span>
+      <span class="latency" id="latencyText"></span>
+    </div>
+    <div class="header-right">
+      <div class="header-menu">
+        <button class="icon-btn" onclick="toggleMenu()" title="Menu">&#8942;</button>
+        <div class="menu-dropdown" id="headerMenu">
+          <button class="menu-item" onclick="resetSession(); closeMenu()">&#8634; Reset session</button>
+          <button class="menu-item" onclick="clearHistory(); closeMenu()">&#128465; Clear history</button>
           <div class="menu-sep"></div>
-          <button class="menu-item danger" onclick="logout(); closeMenu()">logout</button>
+          <button class="menu-item danger" onclick="logout(); closeMenu()">&#8627; Logout</button>
         </div>
       </div>
     </div>
-  </div>
+  </header>
 
-  <!-- Tab Bar -->
-  <div class="tabbar">
-    <button class="tab active" id="tab-chat" onclick="setMode('chat')">~/chat</button>
-    <button class="tab" id="tab-screens" onclick="setMode('screens')">~/screens<span class="tab-badge" id="screenBadge"></span></button>
-    <div class="agent-toggle">
-      <button class="agent-btn active" id="opt-agent" onclick="switchAgent('agent')">cursor</button>
-      <button class="agent-btn" id="opt-claude" onclick="switchAgent('claude')">claude</button>
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-chat" onclick="setMode('chat')">
+      <span class="tab-icon">&#9671;</span> chat
+    </button>
+    <button class="tab-btn" id="tab-screens" onclick="setMode('screens')">
+      <span class="tab-icon">&#9618;</span> screens
+      <span class="tab-badge" id="screenBadge"></span>
+    </button>
+    <div class="agent-toggle" id="agentToggle">
+      <button class="agent-opt active" id="opt-agent" onclick="switchAgent('agent')" title="Cursor Agent">cursor</button>
+      <button class="agent-opt" id="opt-claude" onclick="switchAgent('claude')" title="Claude Code">claude</button>
     </div>
   </div>
 
-  <!-- Queue -->
-  <div class="queue-bar" id="queueBanner">&gt; <span id="queueCount">0</span> tasks queued...</div>
+  <div class="queue-banner" id="queueBanner">
+    <span class="queue-count" id="queueCount">0</span>
+    <span>in queue</span>
+  </div>
 
-  <!-- Chat Messages -->
   <div id="messages">
-    <div class="welcome" id="welcomeCard">
-      <span class="g">$ termi --help</span><br>
-      <br>
-      <span class="b">TERMI</span> — remote agent terminal<br>
-      <br>
-      Type a message to your AI agent, or pick a command:<br>
-      <div class="welcome-cmds">
-        <button class="welcome-cmd" onclick="quick('server status')">server status</button>
-        <button class="welcome-cmd" onclick="quick('show running processes')">processes</button>
-        <button class="welcome-cmd" onclick="quick('disk usage')">disk usage</button>
-        <button class="welcome-cmd" onclick="quick('git status')">git status</button>
-        <button class="welcome-cmd" onclick="quick('show recent logs')">logs</button>
-        <button class="welcome-cmd" onclick="quick('deploy latest changes')">deploy</button>
+    <div class="welcome-card" id="welcomeCard">
+      <div class="welcome-icon">&#9671;</div>
+      <div class="welcome-title">Welcome to termi</div>
+      <div class="welcome-desc">Your remote agent is ready. Send a message or pick a quick action below.</div>
+      <div class="welcome-actions">
+        <div class="welcome-action" onclick="quick('server status')"><span class="welcome-action-icon">&#9881;</span> server status</div>
+        <div class="welcome-action" onclick="quick('show running processes')"><span class="welcome-action-icon">&#9654;</span> processes</div>
+        <div class="welcome-action" onclick="quick('disk usage')"><span class="welcome-action-icon">&#9707;</span> disk usage</div>
+        <div class="welcome-action" onclick="quick('git status')"><span class="welcome-action-icon">&#10140;</span> git status</div>
       </div>
     </div>
   </div>
 
-  <!-- Quick Commands -->
-  <div class="quickbar" id="quickRow">
-    <button class="qcmd" onclick="quick('worker status')">worker</button>
-    <button class="qcmd" onclick="quick('server status')">server</button>
-    <button class="qcmd" onclick="quick('show running processes')">ps</button>
-    <button class="qcmd" onclick="quick('disk usage')">df</button>
-    <button class="qcmd" onclick="quick('show recent logs')">logs</button>
-    <button class="qcmd" onclick="quick('git status')">git</button>
-    <button class="qcmd" onclick="quick('deploy latest changes')">deploy</button>
+  <div class="quick-row" id="quickRow">
+    <div class="quick-chip" onclick="quick('worker status')">worker status</div>
+    <div class="quick-chip" onclick="quick('server status')">server status</div>
+    <div class="quick-chip" onclick="quick('show running processes')">processes</div>
+    <div class="quick-chip" onclick="quick('disk usage')">disk usage</div>
+    <div class="quick-chip" onclick="quick('show recent logs')">logs</div>
+    <div class="quick-chip" onclick="quick('git status')">git status</div>
+    <div class="quick-chip" onclick="quick('deploy latest changes')">deploy</div>
   </div>
 
   <!-- Screen Session List -->
   <div id="screenView">
-    <div class="screen-term-list" id="screenSessionList">
-      <div class="stl-header"><span class="g">$</span> screen -ls</div>
-      <div class="stl-divider">────────────────────────────────</div>
-      <div class="stl-empty">loading...</div>
+    <div class="screen-header">
+      <div class="screen-header-left">
+        <div class="screen-header-title">Sessions</div>
+        <div class="screen-header-count" id="screenCount">0</div>
+      </div>
+      <button class="screen-refresh-btn" id="screenRefreshBtn" onclick="refreshScreens()">&#8635;</button>
+    </div>
+    <div class="ptr-indicator" id="ptrIndicator">&#8635; pull to refresh</div>
+    <div id="screenSessionList">
+      <div class="screen-empty">
+        <div class="screen-empty-icon">&#9618;</div>
+        loading sessions...
+      </div>
     </div>
   </div>
 
-  <!-- Input -->
-  <div class="prompt-area" id="mainInputArea">
-    <span class="prompt-symbol">&gt;</span>
-    <textarea
-      id="input"
-      class="prompt-input"
-      placeholder="type a command..."
-      rows="1"
-      onkeydown="onKey(event)"
-      oninput="resizeTA(this)"
-    ></textarea>
-    <button class="prompt-send" id="sendBtn" onclick="send()" disabled>&crarr;</button>
+  <div class="input-area" id="mainInputArea">
+    <div class="input-wrap">
+      <textarea
+        id="input"
+        placeholder="Message your agent..."
+        rows="1"
+        onkeydown="onKey(event)"
+        oninput="resize(this)"
+      ></textarea>
+    </div>
+    <button class="send-btn" id="sendBtn" onclick="send()" disabled>&#8593;</button>
   </div>
 </div>
 
-<!-- Screen Terminal View -->
+<!-- Screen Terminal View — full screen overlay -->
 <div id="screenTermView">
-  <div class="screen-hdr">
-    <button class="screen-hdr-back" onclick="screenGoBack()">&larr; back</button>
-    <div class="screen-hdr-name" id="screenTermName"></div>
-    <div class="screen-hdr-status" id="screenTermStatus"></div>
+  <div class="screen-term-header">
+    <button class="screen-back-btn" onclick="screenGoBack()">&#8592; Back</button>
+    <div class="screen-term-name" id="screenTermName"></div>
+    <div class="screen-term-status" id="screenTermStatus"></div>
   </div>
   <div id="screenTermContainer"></div>
 </div>
@@ -537,41 +773,49 @@
   let lastThinkingContent = '';
   let latencyMs = null;
   let latencyInterval = null;
+  let msgCount = 0;
+  let screenSessionCount = 0;
 
+  // Screen session state
   let screenTerm = null;
   let screenFitAddon = null;
   let currentScreenSession = null;
   let screenRefreshInterval = null;
 
+  // Swipe back state
   let swipeStartX = 0;
   let swipeStartY = 0;
 
-  // ── Haptic ─────────────────────────────────────────
-  function haptic(s) {
-    if (navigator.vibrate) navigator.vibrate(s === 'light' ? 10 : s === 'medium' ? 20 : 30);
+  // ── Haptic Feedback ────────────────────────────────
+  function haptic(style) {
+    if (navigator.vibrate) {
+      if (style === 'light') navigator.vibrate(10);
+      else if (style === 'medium') navigator.vibrate(20);
+      else navigator.vibrate(30);
+    }
   }
 
   // ── Toast ──────────────────────────────────────────
   let toastTimer = null;
   function showToast(msg) {
     const el = document.getElementById('toast');
-    el.textContent = '> ' + msg;
+    el.textContent = msg;
     el.classList.add('visible');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('visible'), 2000);
+    toastTimer = setTimeout(() => el.classList.remove('visible'), 2500);
   }
 
-  // ── Splash ─────────────────────────────────────────
+  // ── Splash / Auto-connect ──────────────────────────
   function hideSplash() {
     const s = document.getElementById('splash');
     s.classList.add('hidden');
-    setTimeout(() => s.style.display = 'none', 500);
+    setTimeout(() => s.style.display = 'none', 600);
   }
 
   // ── Auth ───────────────────────────────────────────
   function authenticate() {
     const t = document.getElementById('tokenInput').value.trim();
-    if (!t) { document.getElementById('authError').textContent = 'ERR: token required'; return; }
+    if (!t) { document.getElementById('authError').textContent = 'Token required'; return; }
     token = t;
     localStorage.setItem('termi_token', t);
     document.getElementById('auth').style.display = 'none';
@@ -591,8 +835,12 @@
     haptic('light');
     document.getElementById('headerMenu').classList.toggle('open');
   }
-  function closeMenu() { document.getElementById('headerMenu').classList.remove('open'); }
-  document.addEventListener('click', e => { if (!e.target.closest('.menu-wrap')) closeMenu(); });
+  function closeMenu() {
+    document.getElementById('headerMenu').classList.remove('open');
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.header-menu')) closeMenu();
+  });
 
   // ── Socket ─────────────────────────────────────────
   function initSocket() {
@@ -622,11 +870,11 @@
       showToast('reconnected');
     });
 
-    socket.on('connect_error', err => {
+    socket.on('connect_error', (err) => {
       if (err.message === 'Unauthorized') {
         hideSplash();
         document.getElementById('auth').style.display = 'flex';
-        document.getElementById('authError').textContent = 'ERR: invalid token';
+        document.getElementById('authError').textContent = 'Invalid token';
       }
     });
 
@@ -646,27 +894,30 @@
     socket.on('agentSwitched', ({ agentType }) => {
       activeAgent = agentType;
       setAgentUI(agentType);
-      showToast('switched to ' + (agentType === 'claude' ? 'claude' : 'cursor'));
+      showToast('switched to ' + (agentType === 'claude' ? 'Claude Code' : 'Cursor Agent'));
     });
 
     socket.on('response', ({ type, content }) => {
       if (type === 'thinking') {
         lastThinkingContent = content || '';
         if (thinkingEl) {
-          thinkingEl.querySelector('.line-text').textContent = lastThinkingContent;
+          thinkingEl.querySelector('.msg-bubble').textContent = lastThinkingContent;
         } else {
           thinkingEl = addMsg('thinking', '');
-          thinkingEl.querySelector('.line-text').innerHTML = '<span class="cursor-blink"></span>';
+          thinkingEl.querySelector('.msg-bubble').innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
         }
       } else {
         const finalContent = (content && content.trim()) ? content : lastThinkingContent;
         if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
         lastThinkingContent = '';
-        if (finalContent) { addMsg(type, finalContent); haptic('light'); }
+        if (finalContent) {
+          addMsg(type, finalContent);
+          haptic('light');
+        }
       }
     });
 
-    socket.on('queue', q => {
+    socket.on('queue', (q) => {
       const banner = document.getElementById('queueBanner');
       if (q.length > 0) {
         banner.classList.add('visible');
@@ -676,7 +927,11 @@
       }
     });
 
+    // Screen events
     socket.on('screen:list', ({ sessions }) => {
+      screenSessionCount = sessions.length;
+      document.getElementById('screenCount').textContent = sessions.length;
+      // Show badge on screens tab when not on screens tab
       const badge = document.getElementById('screenBadge');
       badge.classList.toggle('visible', sessions.length > 0 && mode !== 'screens');
       renderScreenSessions(sessions);
@@ -688,13 +943,15 @@
     socket.on('screen:error', ({ message }) => console.error('[screen]', message));
   }
 
-  // ── Latency ────────────────────────────────────────
+  // ── Latency Ping ───────────────────────────────────
   function startLatencyPing() {
     stopLatencyPing();
     measureLatency();
     latencyInterval = setInterval(measureLatency, 15000);
   }
-  function stopLatencyPing() { if (latencyInterval) { clearInterval(latencyInterval); latencyInterval = null; } }
+  function stopLatencyPing() {
+    if (latencyInterval) { clearInterval(latencyInterval); latencyInterval = null; }
+  }
   function measureLatency() {
     if (!socket || !socket.connected) return;
     const start = Date.now();
@@ -720,37 +977,34 @@
 
   function addMsg(type, content) {
     hideWelcome();
+    msgCount++;
     const wrap = document.getElementById('messages');
     const div = document.createElement('div');
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const isLong = content.length > 600;
+    const typeMap = { you: 'you', agent: 'agent', cmd: 'cmd', command: 'cmd', error: 'error', system: 'system', thinking: 'thinking' };
+    const cls = typeMap[type] || 'system';
+    div.className = `msg ${cls}`;
 
-    if (type === 'you') {
-      div.className = 'line input';
-      div.innerHTML = `<span class="prompt">&gt; </span>${escHtml(content)}<span class="ts">${time}</span>`;
-    } else if (type === 'agent' || type === 'cmd' || type === 'command') {
-      div.className = 'line output' + (isLong ? ' long' : '');
-      div.innerHTML = `<span class="line-text">${escHtml(content)}</span><span class="line-copy" onclick="copyLine(this)">[copy]</span><span class="ts">${time}</span>`;
-      if (isLong) {
-        const exp = document.createElement('div');
-        exp.className = 'line-expand';
-        exp.textContent = '[show more]';
-        exp.onclick = function() { toggleExpand(div, exp); };
-        wrap.appendChild(div);
-        wrap.appendChild(exp);
-        wrap.scrollTop = wrap.scrollHeight;
-        saveMessage(type, content);
-        return div;
-      }
-    } else if (type === 'error') {
-      div.className = 'line error';
-      div.innerHTML = `ERR: <span class="line-text">${escHtml(content)}</span><span class="ts">${time}</span>`;
-    } else if (type === 'thinking') {
-      div.className = 'line thinking';
-      div.innerHTML = `<span class="line-text"></span>`;
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const isLong = content.length > 800 && cls !== 'system' && cls !== 'thinking';
+
+    if (cls === 'agent' || cls === 'cmd' || cls === 'error' || cls === 'thinking') {
+      div.innerHTML = `
+        <div class="msg-row">
+          <div class="msg-avatar agent-av">t_</div>
+          <div class="msg-content">
+            <div class="msg-bubble${isLong ? ' collapsed' : ''}">${escHtml(content)}${cls === 'agent' ? '<button class="copy-btn" onclick="copyMsg(this)">copy</button>' : ''}</div>
+            ${isLong ? '<button class="show-more-btn" onclick="toggleExpand(this)">show more</button>' : ''}
+            <div class="msg-time">${time}</div>
+          </div>
+        </div>
+      `;
+    } else if (cls === 'you') {
+      div.innerHTML = `
+        <div class="msg-bubble">${escHtml(content)}</div>
+        <div class="msg-time">${time}</div>
+      `;
     } else {
-      div.className = 'line system';
-      div.innerHTML = `# ${escHtml(content)}`;
+      div.innerHTML = `<div class="msg-bubble">${escHtml(content)}</div>`;
     }
 
     wrap.appendChild(div);
@@ -759,55 +1013,68 @@
     return div;
   }
 
-  function copyLine(el) {
-    const line = el.closest('.line');
-    const text = line.querySelector('.line-text').textContent;
-    navigator.clipboard.writeText(text).then(() => { showToast('copied'); haptic('light'); });
+  function copyMsg(btn) {
+    const bubble = btn.parentElement;
+    const text = bubble.textContent.replace('copy', '').trim();
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('copied to clipboard');
+      haptic('light');
+    });
   }
 
-  function toggleExpand(lineEl, btnEl) {
-    if (lineEl.classList.contains('long')) {
-      lineEl.classList.remove('long');
-      btnEl.textContent = '[show less]';
+  function toggleExpand(btn) {
+    const bubble = btn.previousElementSibling.querySelector ? btn.parentElement.querySelector('.msg-bubble') : btn.previousElementSibling;
+    // Find the bubble in the parent
+    const parent = btn.closest('.msg-content') || btn.closest('.msg');
+    const b = parent.querySelector('.msg-bubble');
+    if (b.classList.contains('collapsed')) {
+      b.classList.remove('collapsed');
+      btn.textContent = 'show less';
     } else {
-      lineEl.classList.add('long');
-      btnEl.textContent = '[show more]';
+      b.classList.add('collapsed');
+      btn.textContent = 'show more';
     }
   }
 
-  // ── History ────────────────────────────────────────
+  // ── Message History (localStorage) ─────────────────
   function saveMessage(type, content) {
     if (type === 'thinking') return;
     try {
-      const h = JSON.parse(localStorage.getItem('termi_history') || '[]');
-      h.push({ type, content, ts: Date.now() });
-      if (h.length > 200) h.splice(0, h.length - 200);
-      localStorage.setItem('termi_history', JSON.stringify(h));
+      const history = JSON.parse(localStorage.getItem('termi_history') || '[]');
+      history.push({ type, content, ts: Date.now() });
+      if (history.length > 200) history.splice(0, history.length - 200);
+      localStorage.setItem('termi_history', JSON.stringify(history));
     } catch (_) {}
   }
 
   function loadHistory() {
     try {
-      const h = JSON.parse(localStorage.getItem('termi_history') || '[]');
-      const recent = h.slice(-50);
-      if (!recent.length) return;
+      const history = JSON.parse(localStorage.getItem('termi_history') || '[]');
+      const recent = history.slice(-50);
+      if (recent.length === 0) return;
       hideWelcome();
       const wrap = document.getElementById('messages');
       recent.forEach(m => {
         const div = document.createElement('div');
+        const typeMap = { you: 'you', agent: 'agent', cmd: 'cmd', error: 'error', system: 'system' };
+        const cls = typeMap[m.type] || 'system';
+        div.className = `msg ${cls}`;
         const time = new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        if (m.type === 'you') {
-          div.className = 'line input';
-          div.innerHTML = `<span class="prompt">&gt; </span>${escHtml(m.content)}<span class="ts">${time}</span>`;
-        } else if (m.type === 'agent' || m.type === 'cmd') {
-          div.className = 'line output';
-          div.innerHTML = `<span class="line-text">${escHtml(m.content)}</span><span class="ts">${time}</span>`;
-        } else if (m.type === 'error') {
-          div.className = 'line error';
-          div.innerHTML = `ERR: <span class="line-text">${escHtml(m.content)}</span><span class="ts">${time}</span>`;
+
+        if (cls === 'agent' || cls === 'cmd' || cls === 'error') {
+          div.innerHTML = `
+            <div class="msg-row">
+              <div class="msg-avatar agent-av">t_</div>
+              <div class="msg-content">
+                <div class="msg-bubble">${escHtml(m.content)}</div>
+                <div class="msg-time">${time}</div>
+              </div>
+            </div>
+          `;
+        } else if (cls === 'you') {
+          div.innerHTML = `<div class="msg-bubble">${escHtml(m.content)}</div><div class="msg-time">${time}</div>`;
         } else {
-          div.className = 'line system';
-          div.innerHTML = `# ${escHtml(m.content)}`;
+          div.innerHTML = `<div class="msg-bubble">${escHtml(m.content)}</div>`;
         }
         div.style.animation = 'none';
         wrap.appendChild(div);
@@ -818,29 +1085,24 @@
 
   function clearHistory() {
     localStorage.removeItem('termi_history');
-    const wrap = document.getElementById('messages');
-    wrap.innerHTML = '';
-    showWelcome();
-    showToast('history cleared');
-    haptic('light');
-  }
-
-  function showWelcome() {
+    document.getElementById('messages').innerHTML = '';
+    msgCount = 0;
+    // Re-add welcome card
     document.getElementById('messages').innerHTML = `
-      <div class="welcome" id="welcomeCard">
-        <span class="g">$ termi --help</span><br><br>
-        <span class="b">TERMI</span> — remote agent terminal<br><br>
-        Type a message to your AI agent, or pick a command:<br>
-        <div class="welcome-cmds">
-          <button class="welcome-cmd" onclick="quick('server status')">server status</button>
-          <button class="welcome-cmd" onclick="quick('show running processes')">processes</button>
-          <button class="welcome-cmd" onclick="quick('disk usage')">disk usage</button>
-          <button class="welcome-cmd" onclick="quick('git status')">git status</button>
-          <button class="welcome-cmd" onclick="quick('show recent logs')">logs</button>
-          <button class="welcome-cmd" onclick="quick('deploy latest changes')">deploy</button>
+      <div class="welcome-card" id="welcomeCard">
+        <div class="welcome-icon">&#9671;</div>
+        <div class="welcome-title">Welcome to termi</div>
+        <div class="welcome-desc">Your remote agent is ready. Send a message or pick a quick action below.</div>
+        <div class="welcome-actions">
+          <div class="welcome-action" onclick="quick('server status')"><span class="welcome-action-icon">&#9881;</span> server status</div>
+          <div class="welcome-action" onclick="quick('show running processes')"><span class="welcome-action-icon">&#9654;</span> processes</div>
+          <div class="welcome-action" onclick="quick('disk usage')"><span class="welcome-action-icon">&#9707;</span> disk usage</div>
+          <div class="welcome-action" onclick="quick('git status')"><span class="welcome-action-icon">&#10140;</span> git status</div>
         </div>
       </div>
     `;
+    showToast('history cleared');
+    haptic('light');
   }
 
   // ── Send ───────────────────────────────────────────
@@ -851,91 +1113,110 @@
     haptic('light');
     addMsg('you', msg);
     el.value = '';
-    resizeTA(el);
+    resize(el);
     socket.emit('chat', { message: msg });
   }
 
-  function quick(cmd) { haptic('light'); document.getElementById('input').value = cmd; send(); }
+  function quick(cmd) {
+    haptic('light');
+    document.getElementById('input').value = cmd;
+    send();
+  }
 
   // ── Mode ───────────────────────────────────────────
   function setMode(m) {
     mode = m;
     haptic('light');
-    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(`tab-${m}`).classList.add('active');
 
-    const msgs = document.getElementById('messages');
-    const qr = document.getElementById('quickRow');
-    const inp = document.getElementById('mainInputArea');
-    const sv = document.getElementById('screenView');
+    const messages = document.getElementById('messages');
+    const quickRow = document.getElementById('quickRow');
+    const mainInput = document.getElementById('mainInputArea');
+    const screenView = document.getElementById('screenView');
 
     if (m === 'screens') {
-      msgs.style.display = 'none';
-      qr.style.display = 'none';
-      inp.style.display = 'none';
+      messages.style.display = 'none';
+      quickRow.style.display = 'none';
+      mainInput.style.display = 'none';
       document.getElementById('screenBadge').classList.remove('visible');
       if (currentScreenSession) {
-        sv.classList.remove('active');
+        screenView.classList.remove('active');
         document.getElementById('screenTermView').classList.add('active');
       } else {
-        sv.classList.add('active');
+        screenView.classList.add('active');
         document.getElementById('screenTermView').classList.remove('active');
         loadScreenSessions();
         startScreenRefresh();
       }
     } else {
-      msgs.style.display = 'flex';
-      qr.style.display = 'flex';
-      inp.style.display = 'flex';
-      sv.classList.remove('active');
+      messages.style.display = 'flex';
+      quickRow.style.display = 'flex';
+      mainInput.style.display = 'flex';
+      screenView.classList.remove('active');
       document.getElementById('screenTermView').classList.remove('active');
       stopScreenRefresh();
     }
   }
 
   // ── Screen Sessions ────────────────────────────────
-  function loadScreenSessions() { if (socket && connected) socket.emit('screen:list'); }
+  function loadScreenSessions() {
+    if (socket && connected) socket.emit('screen:list');
+  }
+
+  function refreshScreens() {
+    haptic('light');
+    const btn = document.getElementById('screenRefreshBtn');
+    btn.classList.add('spinning');
+    loadScreenSessions();
+    setTimeout(() => btn.classList.remove('spinning'), 600);
+  }
 
   function startScreenRefresh() {
     stopScreenRefresh();
-    screenRefreshInterval = setInterval(() => { if (!currentScreenSession) loadScreenSessions(); }, 10000);
+    screenRefreshInterval = setInterval(() => {
+      if (!currentScreenSession) loadScreenSessions();
+    }, 10000);
   }
-  function stopScreenRefresh() { if (screenRefreshInterval) { clearInterval(screenRefreshInterval); screenRefreshInterval = null; } }
+
+  function stopScreenRefresh() {
+    if (screenRefreshInterval) { clearInterval(screenRefreshInterval); screenRefreshInterval = null; }
+  }
 
   function renderScreenSessions(sessions) {
     const el = document.getElementById('screenSessionList');
     if (currentScreenSession) return;
 
-    let html = `<div class="stl-header"><span class="g">$</span> screen -ls &nbsp;&nbsp;<span style="color:var(--dim)">(${sessions.length} session${sessions.length !== 1 ? 's' : ''})</span></div>`;
-    html += `<div class="stl-divider">────────────────────────────────</div>`;
+    document.getElementById('ptrIndicator').classList.remove('pulling', 'refreshing');
+    document.getElementById('screenCount').textContent = sessions.length;
 
     if (sessions.length === 0) {
-      html += `<div class="stl-empty">No sockets found.<br><br><span class="g">hint:</span> screen -S &lt;name&gt;</div>`;
-    } else {
-      sessions.forEach(s => {
-        const live = s.status === 'attached';
-        html += `
-          <div class="stl-row ${live ? 'attached' : 'detached'}" onclick="screenJoin('${escAttr(s.fullName)}','${escAttr(s.name)}','${s.status}')">
-            <span class="stl-status ${live ? 'live' : 'idle'}">${live ? '&#9679;' : '&#9675;'}</span>
-            <span class="stl-name">${escHtml(s.name)}</span>
-            <span class="stl-pid">${s.pid}</span>
-            <span class="stl-arrow">&gt;</span>
-          </div>
-        `;
-      });
+      el.innerHTML = `
+        <div class="screen-empty">
+          <div class="screen-empty-icon">&#9618;</div>
+          <div>No active sessions</div>
+          <div class="screen-empty-hint">Start a session with <code>screen -S name</code></div>
+        </div>
+      `;
+      return;
     }
 
-    html += `<div class="stl-actions">
-      <button class="stl-action" onclick="refreshScreens()">[refresh]</button>
-    </div>`;
-
-    el.innerHTML = html;
-  }
-
-  function refreshScreens() {
-    haptic('light');
-    loadScreenSessions();
-    showToast('refreshing...');
+    el.innerHTML = sessions.map(s => {
+      const isAttached = s.status === 'attached';
+      return `
+        <div class="screen-card ${isAttached ? 'attached-card' : 'detached-card'}" onclick="screenJoin('${escAttr(s.fullName)}','${escAttr(s.name)}','${s.status}')">
+          <div class="screen-icon ${isAttached ? 'attached-icon' : 'detached-icon'}">${isAttached ? '&#9654;' : '&#9724;'}</div>
+          <div class="screen-info">
+            <div class="screen-name">${escHtml(s.name)}</div>
+            <div class="screen-meta">
+              <span class="screen-status-badge ${isAttached ? 'live' : 'idle'}">${isAttached ? '&#9679; live' : '&#9675; idle'}</span>
+              <span>PID ${s.pid}</span>
+            </div>
+          </div>
+          <div class="screen-arrow">&#8250;</div>
+        </div>
+      `;
+    }).join('');
   }
 
   function screenJoin(fullName, name, status) {
@@ -945,12 +1226,11 @@
     document.getElementById('screenTermView').classList.add('active');
     document.getElementById('screenView').classList.remove('active');
     document.getElementById('screenTermName').textContent = name;
-    const stEl = document.getElementById('screenTermStatus');
-    const live = status === 'attached';
-    stEl.textContent = live ? 'LIVE' : 'IDLE';
-    stEl.className = 'screen-hdr-status ' + (live ? 'live' : 'idle');
+    document.getElementById('screenTermStatus').textContent = status === 'attached' ? '&#9679; live' : '&#9675; idle';
+    document.getElementById('screenTermStatus').style.color = status === 'attached' ? 'var(--accent)' : 'var(--orange)';
 
     initScreenTerminal();
+
     const cols = screenTerm ? screenTerm.cols : 80;
     const rows = screenTerm ? screenTerm.rows : 24;
     socket.emit('screen:join', { sessionName: fullName, cols, rows });
@@ -961,13 +1241,16 @@
     haptic('light');
     socket.emit('screen:leave', { sessionName: currentScreenSession });
     currentScreenSession = null;
+
     if (screenTerm) {
       window.removeEventListener('resize', handleScreenResize);
       screenTerm.dispose();
       screenTerm = null;
       screenFitAddon = null;
     }
+
     document.getElementById('screenTermView').classList.remove('active');
+
     if (mode === 'screens') {
       document.getElementById('screenView').classList.add('active');
       loadScreenSessions();
@@ -981,41 +1264,49 @@
       cursorBlink: true, cursorStyle: 'block',
       fontSize: 13, fontFamily: 'IBM Plex Mono, monospace',
       theme: {
-        background: '#0a0a0a', foreground: '#ccc', cursor: '#00e676',
+        background: '#0a0a0a', foreground: '#ececec', cursor: '#ececec',
         selectionBackground: '#448aff44',
-        black: '#0a0a0a', red: '#ff5252', green: '#00e676', yellow: '#ffab40',
-        blue: '#5cb8ff', magenta: '#ea80fc', cyan: '#18ffff', white: '#ccc',
-        brightBlack: '#555', brightRed: '#ff8a80', brightGreen: '#69f0ae',
+        black: '#0a0a0a', red: '#ff5252', green: '#00e676', yellow: '#ff9800',
+        blue: '#448aff', magenta: '#e040fb', cyan: '#18ffff', white: '#ececec',
+        brightBlack: '#666666', brightRed: '#ff8a80', brightGreen: '#69f0ae',
         brightYellow: '#ffd740', brightBlue: '#82b1ff', brightMagenta: '#ea80fc',
-        brightCyan: '#84ffff', brightWhite: '#fff',
+        brightCyan: '#84ffff', brightWhite: '#ffffff',
       },
-      scrollback: 5000, allowProposedApi: true,
+      scrollback: 5000,
+      allowProposedApi: true,
     });
     screenFitAddon = new FitAddon.FitAddon();
     screenTerm.loadAddon(screenFitAddon);
     screenTerm.open(container);
-    screenTerm.onData(data => {
-      if (socket && currentScreenSession) socket.emit('screen:input', { sessionName: currentScreenSession, data });
+
+    screenTerm.onData((data) => {
+      if (socket && currentScreenSession) {
+        socket.emit('screen:input', { sessionName: currentScreenSession, data });
+      }
     });
-    setTimeout(() => screenFitAddon.fit(), 100);
-    setTimeout(() => screenFitAddon.fit(), 300);
+
+    setTimeout(() => { screenFitAddon.fit(); }, 100);
+    setTimeout(() => { screenFitAddon.fit(); }, 300);
     window.addEventListener('resize', handleScreenResize);
   }
 
   function handleScreenResize() {
     if (screenFitAddon && screenTerm) {
       screenFitAddon.fit();
-      if (socket && currentScreenSession) socket.emit('screen:resize', { sessionName: currentScreenSession, cols: screenTerm.cols, rows: screenTerm.rows });
+      if (socket && currentScreenSession) {
+        socket.emit('screen:resize', { sessionName: currentScreenSession, cols: screenTerm.cols, rows: screenTerm.rows });
+      }
     }
   }
 
-  // ── Swipe Back ─────────────────────────────────────
-  document.addEventListener('touchstart', e => {
+  // ── Swipe Back Gesture ─────────────────────────────
+  document.addEventListener('touchstart', (e) => {
     if (!currentScreenSession) return;
     swipeStartX = e.touches[0].clientX;
     swipeStartY = e.touches[0].clientY;
   }, { passive: true });
-  document.addEventListener('touchend', e => {
+
+  document.addEventListener('touchend', (e) => {
     if (!currentScreenSession) return;
     const dx = e.changedTouches[0].clientX - swipeStartX;
     const dy = Math.abs(e.changedTouches[0].clientY - swipeStartY);
@@ -1023,44 +1314,57 @@
   }, { passive: true });
 
   // ── Pull-to-refresh ────────────────────────────────
-  let ptrStartY = 0, ptrActive = false;
+  let ptrStartY = 0;
+  let ptrActive = false;
+
   function setupPullToRefresh() {
     const list = document.getElementById('screenSessionList');
-    list.addEventListener('touchstart', e => {
+    list.addEventListener('touchstart', (e) => {
       if (list.scrollTop === 0) { ptrStartY = e.touches[0].clientY; ptrActive = true; }
     }, { passive: true });
-    list.addEventListener('touchend', e => {
+    list.addEventListener('touchmove', (e) => {
+      if (!ptrActive) return;
+      if (e.touches[0].clientY - ptrStartY > 50) document.getElementById('ptrIndicator').classList.add('pulling');
+    }, { passive: true });
+    list.addEventListener('touchend', () => {
       if (!ptrActive) return;
       ptrActive = false;
-      if (e.changedTouches[0].clientY - ptrStartY > 60) { haptic('light'); loadScreenSessions(); showToast('refreshing...'); }
+      const ptr = document.getElementById('ptrIndicator');
+      if (ptr.classList.contains('pulling')) {
+        ptr.classList.remove('pulling');
+        ptr.classList.add('refreshing');
+        haptic('light');
+        loadScreenSessions();
+      }
     }, { passive: true });
   }
 
-  // ── Agent ──────────────────────────────────────────
+  // ── Agent switcher ─────────────────────────────────
   function switchAgent(type) {
     if (!socket || !connected || type === activeAgent) return;
     haptic('medium');
     socket.emit('setAgent', { type });
   }
+
   function setAgentUI(type) {
     activeAgent = type;
-    document.querySelectorAll('.agent-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.agent-opt').forEach(b => b.classList.remove('active'));
     document.getElementById(`opt-${type}`).classList.add('active');
   }
 
   // ── Utils ──────────────────────────────────────────
   function setStatus(state, text) {
-    const d = document.getElementById('statusDot');
-    d.className = 'topbar-dot' + (state === 'on' ? ' on' : state === 'err' ? ' err' : '');
+    const dot = document.getElementById('statusDot');
+    dot.className = 'status-dot' + (state === 'on' ? ' on' : state === 'err' ? ' err' : '');
     document.getElementById('statusText').textContent = text;
   }
 
   function onKey(e) {
-    const mob = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (!mob && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
-  function resizeTA(el) {
+  function resize(el) {
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 100) + 'px';
   }
@@ -1069,6 +1373,7 @@
     return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;').replace(/\n/g,'<br>');
   }
+
   function escAttr(t) {
     return String(t).replace(/'/g, "\\'").replace(/"/g, '&quot;');
   }
@@ -1076,7 +1381,8 @@
   // ── Keyboard Awareness ─────────────────────────────
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', () => {
-      if (window.innerHeight - window.visualViewport.height > 100) {
+      const diff = window.innerHeight - window.visualViewport.height;
+      if (diff > 100) {
         setTimeout(() => {
           document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
           if (screenFitAddon && screenTerm && currentScreenSession) screenFitAddon.fit();
@@ -1088,12 +1394,23 @@
   // ── Init ───────────────────────────────────────────
   window.addEventListener('load', () => {
     const saved = localStorage.getItem('termi_token');
-    if (saved) { token = saved; initSocket(); }
-    else { hideSplash(); document.getElementById('auth').style.display = 'flex'; }
+    if (saved) {
+      token = saved;
+      initSocket();
+    } else {
+      hideSplash();
+      document.getElementById('auth').style.display = 'flex';
+    }
 
     loadHistory();
-    document.getElementById('tokenInput').addEventListener('keydown', e => { if (e.key === 'Enter') authenticate(); });
-    document.getElementById('input').addEventListener('input', () => { document.getElementById('sendBtn').disabled = !connected; });
+
+    document.getElementById('tokenInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') authenticate();
+    });
+    document.getElementById('input').addEventListener('input', () => {
+      document.getElementById('sendBtn').disabled = !connected;
+    });
+
     setupPullToRefresh();
 
     setTimeout(() => {
@@ -1104,7 +1421,10 @@
     }, 5000);
   });
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  // ── Service Worker (PWA) ───────────────────────────
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 </script>
 </body>
 </html>
