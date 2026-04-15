@@ -596,15 +596,15 @@
   .scroll-fab:active { transform: scale(0.9); background: var(--green); color: #000; }
   @keyframes fabIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
 
-  /* ── Progress Ring on Send Button ──────────────── */
-  .prompt-send { position: relative; }
-  .prompt-send .ring {
-    position: absolute; inset: -3px; border-radius: 13px;
-    border: 2px solid transparent; border-top-color: #fff;
-    animation: hSpin 0.8s linear infinite; display: none;
+  /* ── Send Button Busy State ─────────────────────── */
+  .prompt-send.busy {
+    background: var(--surface3); color: var(--dim); pointer-events: none;
+    animation: sendPulse 1.2s ease-in-out infinite;
   }
-  .prompt-send.busy .ring { display: block; }
-  .prompt-send.busy { background: var(--surface3); color: var(--dim); pointer-events: none; }
+  @keyframes sendPulse {
+    0%,100% { box-shadow: 0 0 0 0 var(--green-glow); }
+    50% { box-shadow: 0 0 0 6px transparent; }
+  }
 
   /* ── Skeleton Loading ──────────────────────────── */
   .skel-card {
@@ -827,7 +827,7 @@
       <textarea id="input" class="prompt-ta" placeholder="type a command..." rows="1"
         onkeydown="onKey(event)" oninput="resizeTA(this)"></textarea>
     </div>
-    <button class="prompt-send" id="sendBtn" onclick="send()" disabled>&#8593;<span class="ring"></span></button>
+    <button class="prompt-send" id="sendBtn" onclick="send()" disabled>&#8593;</button>
   </div>
 </div>
 
