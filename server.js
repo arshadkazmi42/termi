@@ -3,6 +3,7 @@ const { exec, spawn } = require('child_process');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 const util = require('util');
 const os = require('os');
 
@@ -182,17 +183,19 @@ function runClaudeCode(message, onChunk) {
     let output = '';
     let error = '';
 
-    const userInfo = getClaudeUid();
     const args = ['--print', '--dangerously-skip-permissions'];
     if (hasSession) args.push('--continue');
     args.push(message);
+
+    // Only switch user if running as root and CLAUDE_USER is different
+    const isRoot = process.getuid && process.getuid() === 0;
+    const userInfo = isRoot ? getClaudeUid() : null;
 
     const spawnOpts = {
       cwd: WORK_DIR,
       env: {
         ...process.env,
-        HOME: userInfo ? userInfo.home : process.env.HOME,
-        USER: CLAUDE_USER,
+        ...(userInfo ? { HOME: userInfo.home, USER: CLAUDE_USER } : {}),
       },
       stdio: ['pipe', 'pipe', 'pipe'],
       ...(userInfo ? { uid: userInfo.uid, gid: userInfo.gid } : {}),
@@ -212,14 +215,16 @@ function runClaudeCode(message, onChunk) {
       error += data.toString();
     });
 
-    proc.on('close', () => {
+    proc.on('close', (code) => {
+      console.log('[claude] closed, code:', code, 'stdout:', output.length, 'stderr:', error.length);
       agentRunning = false;
       if (output) resolve(output);
-      else if (error) resolve(`STDERR: ${error}`);
+      else if (error) resolve(error);
       else resolve('Claude completed with no output.');
     });
 
     proc.on('error', (err) => {
+      console.log('[claude] error:', err.message);
       agentRunning = false;
       reject(err);
     });
@@ -240,6 +245,104 @@ async function runCommand(command) {
     return stdout + (stderr ? `\nSTDERR: ${stderr}` : '');
   } catch (err) {
     return `Error: ${err.message}`;
+  }
+}
+
+// ── Screen Session Management (node-pty + screen -x) ─────
+const pty = require('node-pty');
+const screenPtys = new Map(); // key: `${socketId}:${sessionName}` → { pty, sessionName }
+
+async function listScreenSessions() {
+  try {
+    const { stdout } = await execAsync('screen -ls', { timeout: 5000 });
+    return parseScreenLs(stdout);
+  } catch (err) {
+    if (err.stdout) return parseScreenLs(err.stdout);
+    return [];
+  }
+}
+
+function parseScreenLs(output) {
+  const sessions = [];
+  for (const line of output.split('\n')) {
+    const match = line.match(/^\t(\d+)\.(\S+)\t\(([^)]+)\)/);
+    if (!match) continue;
+    const pid = match[1];
+    const name = match[2];
+    const statusRaw = match[3].toLowerCase();
+    const attached = statusRaw.includes('attached');
+    sessions.push({ pid, name, fullName: `${pid}.${name}`, status: attached ? 'attached' : 'detached' });
+  }
+  return sessions;
+}
+
+function attachScreen(socket, sessionName, cols, rows) {
+  const key = `${socket.id}:${sessionName}`;
+  detachScreen(socket, sessionName);
+
+  console.log('[screen] attaching via node-pty:', sessionName, `${cols}x${rows}`);
+
+  const term = pty.spawn('screen', ['-x', sessionName], {
+    name: 'xterm-256color',
+    cols: cols || 80,
+    rows: rows || 24,
+    cwd: process.env.HOME,
+    env: process.env,
+  });
+
+  term.onData((data) => {
+    socket.emit('screen:output', { data });
+  });
+
+  term.onExit(({ exitCode }) => {
+    console.log('[screen] pty exited:', sessionName, 'code:', exitCode);
+    screenPtys.delete(key);
+    socket.emit('screen:exit', { sessionName, exitCode });
+  });
+
+  screenPtys.set(key, { pty: term, sessionName });
+}
+
+function detachScreen(socket, sessionName) {
+  const key = `${socket.id}:${sessionName}`;
+  const entry = screenPtys.get(key);
+  if (entry) {
+    // Send detach key (Ctrl-A d) to cleanly leave without killing session
+    entry.pty.write('\x01d');
+    setTimeout(() => {
+      try { entry.pty.kill(); } catch (_) {}
+    }, 500);
+    screenPtys.delete(key);
+  }
+}
+
+function detachAllScreens(socketId) {
+  for (const [key, entry] of screenPtys.entries()) {
+    if (key.startsWith(`${socketId}:`)) {
+      entry.pty.write('\x01d');
+      setTimeout(() => {
+        try { entry.pty.kill(); } catch (_) {}
+      }, 500);
+      screenPtys.delete(key);
+    }
+  }
+}
+
+function sendScreenInput(socket, sessionName, data) {
+  const key = `${socket.id}:${sessionName}`;
+  const entry = screenPtys.get(key);
+  if (entry) {
+    entry.pty.write(data);
+    return true;
+  }
+  return false;
+}
+
+function resizeScreenPty(socket, sessionName, cols, rows) {
+  const key = `${socket.id}:${sessionName}`;
+  const entry = screenPtys.get(key);
+  if (entry) {
+    try { entry.pty.resize(cols, rows); } catch (_) {}
   }
 }
 
@@ -351,21 +454,51 @@ io.on('connection', (socket) => {
     socket.emit('response', { type: 'system', content: 'Session reset — starting fresh.' });
   });
 
-  socket.on('command', async ({ command }) => {
-    try {
-      socket.emit('response', { type: 'thinking', content: `Running: ${command}` });
-      const output = await runCommand(command);
-      const cmdResponse = { type: 'command', content: output };
-      lastResponse = cmdResponse;
-      socket.emit('response', cmdResponse);
-    } catch (err) {
-      socket.emit('response', { type: 'error', content: err.message });
-    }
+  // ── Screen session events ──────────────────────────
+  socket.on('screen:list', async () => {
+    const sessions = await listScreenSessions();
+    socket.emit('screen:list', { sessions });
+  });
+
+  socket.on('screen:join', ({ sessionName, cols, rows }) => {
+    console.log('[screen] join:', sessionName, `${cols}x${rows}`);
+    attachScreen(socket, sessionName, cols, rows);
+  });
+
+  socket.on('screen:leave', ({ sessionName }) => {
+    console.log('[screen] leave:', sessionName);
+    detachScreen(socket, sessionName);
+  });
+
+  socket.on('screen:input', ({ sessionName, data }) => {
+    sendScreenInput(socket, sessionName, data);
+  });
+
+  socket.on('screen:resize', ({ sessionName, cols, rows }) => {
+    resizeScreenPty(socket, sessionName, cols, rows);
   });
 
   socket.on('disconnect', (reason) => {
     console.log('[socket] disconnected:', socket.id, 'reason:', reason, 'agent running:', agentRunning);
+    detachAllScreens(socket.id);
   });
 });
 
-server.listen(PORT, () => console.log(`Agent UI on port ${PORT} | workdir: ${WORK_DIR}`));
+// ── Start server ─────────────────────────────────────────
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Agent UI on port ${PORT} | workdir: ${WORK_DIR}`));
+}
+
+// ── Exports for testing ──────────────────────────────────
+module.exports = {
+  app, server, io,
+  parseScreenLs,
+  listScreenSessions,
+  screenPtys,
+  spawnRunner,
+  runCommand,
+  getState: () => ({ queue, hasSession, agentRunning, agentType, lastResponse, pendingOutput }),
+  resetState: () => { queue = []; hasSession = false; agentRunning = false; lastResponse = null; pendingOutput = ''; agentType = 'agent'; },
+  AUTH_TOKEN,
+  PORT,
+};
