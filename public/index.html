@@ -1420,20 +1420,35 @@
   function escHtml(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');}
   function escAttr(t){return String(t).replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 
-  // Markdown-like rendering for agent output
+  // Allow-list of safe URL schemes for markdown links.
+  // Blocks javascript:, data:, vbscript:, file:, etc.
+  function isSafeUrl(u){
+    return /^(https?:\/\/|mailto:|\/|#)/i.test(String(u).trim());
+  }
+
+  // Markdown-like rendering for agent output.
+  // Input is HTML-escaped first so raw tags injected by the agent
+  // (e.g. <img onerror=...>) cannot execute. Markdown patterns are then
+  // applied on the escaped text. Link hrefs go through isSafeUrl.
   function renderMd(t){
-    let s = String(t);
-    // Code blocks (```...```)
+    // 1) Escape everything. escHtml also turns \n into <br>; convert it
+    //    back to a real newline so the regexes below still match
+    //    multi-line code blocks, then re-apply <br> at the end.
+    let s = escHtml(String(t)).replace(/<br>/g, '\n');
+    // 2) Code blocks (body is already escaped from step 1)
     s = s.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-      return `<pre><code>${code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').trimEnd()}</code></pre>`;
+      return `<pre><code>${code.trimEnd()}</code></pre>`;
     });
-    // Inline code
+    // 3) Inline code
     s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // Bold
+    // 4) Bold
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    // Links
-    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-    // Line breaks
+    // 5) Links — label already escaped; href scheme-validated
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+      const href = isSafeUrl(url) ? url : '#';
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    });
+    // 6) Line breaks
     s = s.replace(/\n/g, '<br>');
     return s;
   }
