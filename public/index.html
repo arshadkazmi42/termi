@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -557,7 +557,8 @@
 
   /* ── Screen Terminal View ───────────────────────── */
   #screenTermView {
-    display: none; position: fixed; inset: 0; z-index: 50;
+    display: none; position: fixed; left: 0; top: 0;
+    width: 100%; height: 100dvh; z-index: 50;
     flex-direction: column; background: var(--bg);
     animation: slideRight 0.2s ease;
   }
@@ -585,6 +586,39 @@
   .stv-status.idle { color: var(--orange); }
 
   #screenTermContainer { flex: 1; min-height: 0; padding: 2px; background: var(--bg); overflow: hidden; }
+
+  /* Mobile keybar — special keys above the soft keyboard */
+  .stv-keybar {
+    display: none; flex-shrink: 0; gap: 6px; padding: 6px 8px;
+    padding-bottom: calc(6px + var(--safe-b));
+    background: var(--surface); border-top: 1px solid var(--border);
+    overflow-x: auto; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .stv-keybar::-webkit-scrollbar { display: none; }
+  .stv-keybar.on { display: flex; }
+  .stv-key {
+    flex-shrink: 0; min-width: 40px; height: 34px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 12px;
+    font-weight: 600; border-radius: 8px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0 10px; transition: all 0.1s; user-select: none;
+  }
+  .stv-key:active { background: var(--green); color: #000; transform: scale(0.94); }
+  .stv-key.kbd { color: var(--green); }
+
+  /* Portrait / narrow: compact header + show keybar on touch */
+  @media (max-width: 600px) {
+    .stv-header { padding: 6px 10px; padding-top: calc(6px + var(--safe-t)); gap: 8px; }
+    .stv-back { padding: 5px 9px; font-size: 11px; }
+    .stv-name { font-size: 12px; }
+    .stv-status { font-size: 9px; }
+    #screenTermContainer { padding: 1px; }
+  }
+  @media (hover: none) and (pointer: coarse) {
+    #screenTermView .stv-keybar { display: flex; }
+  }
 
   /* ── Scroll-to-bottom FAB ────────────────────────── */
   .scroll-fab {
@@ -844,8 +878,21 @@
     <button class="stv-back" onclick="screenGoBack()">&#8592; back</button>
     <div class="stv-name" id="screenTermName"></div>
     <div class="stv-status" id="screenTermStatus"></div>
+    <button class="stv-back" onclick="screenFocusInput()" title="Show keyboard" style="padding:5px 9px">kbd</button>
   </div>
   <div id="screenTermContainer"></div>
+  <div class="stv-keybar" id="screenKeybar">
+    <button class="stv-key" data-seq="esc">esc</button>
+    <button class="stv-key" data-seq="tab">tab</button>
+    <button class="stv-key" data-seq="c-c">^C</button>
+    <button class="stv-key" data-seq="c-d">^D</button>
+    <button class="stv-key" data-seq="c-z">^Z</button>
+    <button class="stv-key" data-seq="up">&uarr;</button>
+    <button class="stv-key" data-seq="down">&darr;</button>
+    <button class="stv-key" data-seq="left">&larr;</button>
+    <button class="stv-key" data-seq="right">&rarr;</button>
+    <button class="stv-key" data-seq="cr">&crarr;</button>
+  </div>
 </div>
 
 <script>
@@ -1243,15 +1290,39 @@
     if(!currentScreenSession)return; haptic('light');
     socket.emit('screen:leave',{sessionName:currentScreenSession});
     currentScreenSession=null;
-    if(screenTerm){window.removeEventListener('resize',handleScreenResize);screenTerm.dispose();screenTerm=null;screenFitAddon=null;}
-    document.getElementById('screenTermView').classList.remove('active');
+    if(screenTerm){
+      window.removeEventListener('resize',handleScreenResize);
+      window.removeEventListener('orientationchange',handleScreenResize);
+      if(window.visualViewport){
+        window.visualViewport.removeEventListener('resize',handleScreenResize);
+        window.visualViewport.removeEventListener('scroll',applyViewportHeight);
+      }
+      screenTerm.dispose();screenTerm=null;screenFitAddon=null;
+    }
+    const v=document.getElementById('screenTermView');
+    v.classList.remove('active'); v.style.height='';
     if(mode==='screens'){document.getElementById('screenView').classList.add('active');loadScreenSessions();}
+  }
+
+  function screenTermFontSize(){
+    const w=window.innerWidth;
+    if(w<400) return 10;
+    if(w<600) return 11;
+    if(w<900) return 12;
+    return 13;
+  }
+
+  function applyViewportHeight(){
+    const v=document.getElementById('screenTermView');
+    if(!v||!v.classList.contains('active'))return;
+    const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
+    v.style.height=h+'px';
   }
 
   function initScreenTerminal(){
     const c=document.getElementById('screenTermContainer'); c.innerHTML='';
     screenTerm=new Terminal({
-      cursorBlink:true, cursorStyle:'block', fontSize:13,
+      cursorBlink:true, cursorStyle:'block', fontSize:screenTermFontSize(),
       fontFamily:'JetBrains Mono, SF Mono, monospace',
       theme:{
         background:'#0b0b0f',foreground:'#e8e8ef',cursor:'#22dd88',
@@ -1267,16 +1338,53 @@
     screenFitAddon=new FitAddon.FitAddon();
     screenTerm.loadAddon(screenFitAddon); screenTerm.open(c);
     screenTerm.onData(d=>{if(socket&&currentScreenSession)socket.emit('screen:input',{sessionName:currentScreenSession,data:d});});
+    applyViewportHeight();
     setTimeout(()=>screenFitAddon.fit(),100);
     setTimeout(()=>screenFitAddon.fit(),300);
     window.addEventListener('resize',handleScreenResize);
+    window.addEventListener('orientationchange',handleScreenResize);
+    if(window.visualViewport){
+      window.visualViewport.addEventListener('resize',handleScreenResize);
+      window.visualViewport.addEventListener('scroll',applyViewportHeight);
+    }
   }
 
   function handleScreenResize(){
+    applyViewportHeight();
+    if(screenTerm){
+      const fs=screenTermFontSize();
+      if(screenTerm.options.fontSize!==fs) screenTerm.options.fontSize=fs;
+    }
     if(screenFitAddon&&screenTerm){screenFitAddon.fit();
       if(socket&&currentScreenSession)socket.emit('screen:resize',{sessionName:currentScreenSession,cols:screenTerm.cols,rows:screenTerm.rows});
     }
   }
+
+  function screenFocusInput(){
+    if(!screenTerm)return;
+    haptic('light');
+    screenTerm.focus();
+    const ta=document.querySelector('#screenTermContainer textarea');
+    if(ta){ta.focus();ta.click();}
+  }
+
+  function sendScreenSeq(seq){
+    if(!socket||!currentScreenSession)return;
+    haptic('light');
+    socket.emit('screen:input',{sessionName:currentScreenSession,data:seq});
+  }
+
+  const SCREEN_KEY_MAP={
+    esc:'\x1b', tab:'\t', cr:'\r',
+    'c-c':'\x03', 'c-d':'\x04', 'c-z':'\x1a',
+    up:'\x1b[A', down:'\x1b[B', right:'\x1b[C', left:'\x1b[D',
+  };
+  document.addEventListener('click',e=>{
+    const k=e.target.closest('.stv-key');
+    if(!k)return;
+    const seq=SCREEN_KEY_MAP[k.getAttribute('data-seq')];
+    if(seq) sendScreenSeq(seq);
+  });
 
   // Swipe back
   document.addEventListener('touchstart',e=>{if(!currentScreenSession)return;swipeStartX=e.touches[0].clientX;swipeStartY=e.touches[0].clientY;},{passive:true});
