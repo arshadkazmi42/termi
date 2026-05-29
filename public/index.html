@@ -892,6 +892,7 @@
     <button class="stv-key" data-seq="left">&larr;</button>
     <button class="stv-key" data-seq="right">&rarr;</button>
     <button class="stv-key" data-seq="cr">&crarr;</button>
+    <button class="stv-key kbd" data-action="paste" title="Paste from clipboard">paste</button>
   </div>
 </div>
 
@@ -1379,9 +1380,20 @@
     'c-c':'\x03', 'c-d':'\x04', 'c-z':'\x1a',
     up:'\x1b[A', down:'\x1b[B', right:'\x1b[C', left:'\x1b[D',
   };
+  async function screenPaste(){
+    if(!socket||!currentScreenSession)return;
+    try{
+      const text=await navigator.clipboard.readText();
+      if(text){ sendScreenSeq(text); showToast('pasted'); }
+    }catch(err){
+      showToast('clipboard blocked — needs https');
+    }
+  }
+
   document.addEventListener('click',e=>{
     const k=e.target.closest('.stv-key');
     if(!k)return;
+    if(k.getAttribute('data-action')==='paste'){ screenPaste(); return; }
     const seq=SCREEN_KEY_MAP[k.getAttribute('data-seq')];
     if(seq) sendScreenSeq(seq);
   });
