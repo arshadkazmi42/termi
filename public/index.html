@@ -117,6 +117,15 @@
   }
   #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+  #pasteFallback {
+    display: none; position: fixed; bottom: 140px; left: 50%;
+    transform: translateX(-50%); z-index: 170; width: min(90vw, 480px);
+    height: 80px; padding: 10px 14px; background: var(--surface3);
+    border: 1px solid var(--border-hi); border-radius: 12px;
+    font-family: var(--mono); font-size: 14px; color: var(--green);
+    resize: none; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+
   /* ── Reconnect ──────────────────────────────────── */
   #reconnectBanner {
     position: fixed; top: 0; left: 0; right: 0; z-index: 150;
@@ -755,6 +764,7 @@
 
 <!-- Toast -->
 <div id="toast"></div>
+<textarea id="pasteFallback" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="paste here, then tap away"></textarea>
 
 <!-- Reconnect -->
 <div id="reconnectBanner">connection lost - reconnecting...</div>
@@ -1382,12 +1392,35 @@
   };
   async function screenPaste(){
     if(!socket||!currentScreenSession)return;
-    try{
-      const text=await navigator.clipboard.readText();
-      if(text){ sendScreenSeq(text); showToast('pasted'); }
-    }catch(err){
-      showToast('clipboard blocked — needs https');
+    // Clipboard API needs a secure context (https or localhost). When it's
+    // unavailable (plain http over LAN), fall back to a manual paste prompt.
+    if(navigator.clipboard&&navigator.clipboard.readText){
+      try{
+        const text=await navigator.clipboard.readText();
+        if(text){ sendScreenSeq(text); showToast('pasted'); }
+        return;
+      }catch(err){ /* fall through to manual paste */ }
     }
+    manualPaste();
+  }
+
+  function manualPaste(){
+    const ta=document.getElementById('pasteFallback');
+    ta.value='';
+    ta.style.display='block';
+    ta.focus();
+    const done=()=>{
+      const text=ta.value;
+      ta.style.display='none';
+      ta.removeEventListener('blur',done);
+      ta.removeEventListener('keydown',onEsc);
+      if(text){ sendScreenSeq(text); showToast('pasted'); }
+    };
+    const onEsc=e=>{ if(e.key==='Escape'){ ta.value=''; done(); } };
+    // Give the OS paste gesture a moment, then send on blur or after input settles.
+    ta.addEventListener('blur',done);
+    ta.addEventListener('keydown',onEsc);
+    showToast('paste here, then tap away');
   }
 
   document.addEventListener('click',e=>{
