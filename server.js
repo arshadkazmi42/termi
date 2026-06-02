@@ -291,7 +291,7 @@ function attachScreen(socket, sessionName, cols, rows) {
   });
 
   term.onData((data) => {
-    socket.emit('screen:output', { data });
+    socket.emit('screen:output', { sessionName, data });
   });
 
   term.onExit(({ exitCode }) => {
