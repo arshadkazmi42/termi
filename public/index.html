@@ -656,6 +656,32 @@
   .stv-key:active { background: var(--green); color: #000; transform: scale(0.94); }
   .stv-key.kbd { color: var(--green); }
 
+  /* Header toggle showing an "on" state (e.g. the input-bar switch) */
+  .stv-back.on { background: var(--green); color: #000; border-color: var(--green); }
+
+  /* Optional text-input bar — type a line and send it to the focused session */
+  .stv-inputbar {
+    display: none; flex-shrink: 0; gap: 6px; padding: 6px 8px;
+    background: var(--surface); border-top: 1px solid var(--border);
+    align-items: center;
+  }
+  .stv-inputbar.on { display: flex; }
+  .stv-input-field {
+    flex: 1; min-width: 0; height: 34px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 13px;
+    border-radius: 8px; padding: 0 12px; outline: none;
+  }
+  .stv-input-field:focus { border-color: var(--green); }
+  .stv-input-send {
+    flex-shrink: 0; height: 34px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--green); font-family: var(--mono); font-size: 12px;
+    font-weight: 600; border-radius: 8px; cursor: pointer; padding: 0 14px;
+    transition: all 0.1s;
+  }
+  .stv-input-send:active { background: var(--green); color: #000; transform: scale(0.96); }
+
   /* Portrait / narrow: compact header + show keybar on touch */
   @media (max-width: 600px) {
     .stv-header { padding: 6px 10px; padding-top: calc(6px + var(--safe-t)); gap: 8px; }
@@ -928,9 +954,14 @@
     <div class="stv-name" id="screenTermName"></div>
     <div class="stv-status" id="screenTermStatus"></div>
     <button class="stv-back" id="addPaneBtn" onclick="screenAddPane()" title="Open another session in a split pane" style="padding:5px 9px">+ pane</button>
+    <button class="stv-back" id="inputToggleBtn" onclick="toggleInputBar()" title="Toggle the text input bar" style="padding:5px 9px">input</button>
     <button class="stv-back" onclick="screenFocusInput()" title="Show keyboard" style="padding:5px 9px">kbd</button>
   </div>
   <div id="screenTermContainer"></div>
+  <form class="stv-inputbar" id="screenInputBar" onsubmit="sendInputBar(event)">
+    <input type="text" id="screenInputField" class="stv-input-field" placeholder="type input, Enter to send" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" />
+    <button type="submit" class="stv-input-send">send</button>
+  </form>
   <div class="stv-keybar" id="screenKeybar">
     <button class="stv-key" data-seq="esc">esc</button>
     <button class="stv-key" data-seq="tab">tab</button>
@@ -1359,6 +1390,7 @@
 
   function showTermView(){
     addingPane=false;
+    setInputBar(localStorage.getItem('termi_input_bar')==='1');
     document.getElementById('screenTermView').classList.add('active');
     document.getElementById('screenView').classList.remove('active');
     applyViewportHeight();
@@ -1535,6 +1567,28 @@
     if(!socket||!focusedScreen)return;
     haptic('light');
     socket.emit('screen:input',{sessionName:focusedScreen,data:seq});
+  }
+
+  // Optional text-input bar — off by default, toggled from the header.
+  function setInputBar(on){
+    document.getElementById('screenInputBar').classList.toggle('on',on);
+    document.getElementById('inputToggleBtn').classList.toggle('on',on);
+  }
+  function toggleInputBar(){
+    const on=!document.getElementById('screenInputBar').classList.contains('on');
+    haptic('light');
+    setInputBar(on);
+    localStorage.setItem('termi_input_bar',on?'1':'0');
+    if(on){const f=document.getElementById('screenInputField');if(f)f.focus();}
+  }
+  function sendInputBar(e){
+    e.preventDefault();
+    const f=document.getElementById('screenInputField');
+    if(f.value==='')return;
+    if(!socket||!focusedScreen){showToast('no session');return;}
+    sendScreenSeq(f.value+'\r');
+    f.value='';
+    f.focus();
   }
 
   const SCREEN_KEY_MAP={
