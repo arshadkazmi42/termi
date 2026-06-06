@@ -1346,7 +1346,7 @@
     // While panes are open we only re-render the list if the user is picking an extra pane.
     if(screenPanes.size>0&&!addingPane)return;
     // When adding a pane, a chip lets the user return to the open panes without picking.
-    const backChip=addingPane?`<div class="scr-card" onclick="cancelAddPane()" style="justify-content:center;gap:8px">
+    const backChip=addingPane?`<div class="scr-card" role="button" tabindex="0" aria-label="Back to panes" onclick="cancelAddPane()" style="justify-content:center;gap:8px">
         <span class="scr-chevron" style="transform:rotate(180deg)">&#8250;</span>
         <div class="scr-name">back to panes</div>
       </div>`:'';
@@ -1361,7 +1361,7 @@
     el.innerHTML=backChip+sessions.map(s=>{
       const live=s.status==='attached';
       const open=screenPanes.has(s.fullName);
-      return `<div class="scr-card ${live?'live':'idle'}${open?' open':''}" onclick="screenJoin('${escAttr(s.fullName)}','${escAttr(s.name)}','${s.status}')">
+      return `<div class="scr-card ${live?'live':'idle'}${open?' open':''}" role="button" tabindex="0" aria-label="Open screen session ${escAttr(s.name)}" data-session="${escAttr(s.fullName)}" onclick="screenJoin('${escAttr(s.fullName)}','${escAttr(s.name)}','${s.status}')">
         <div class="scr-icon ${live?'live':'idle'}">&gt;_</div>
         <div class="scr-info">
           <div class="scr-name">${escHtml(s.name)}</div>
@@ -1635,6 +1635,17 @@
     if(k.getAttribute('data-action')==='paste'){ screenPaste(); return; }
     const seq=SCREEN_KEY_MAP[k.getAttribute('data-seq')];
     if(seq) sendScreenSeq(seq);
+  });
+
+  // Keyboard / automation activation for the screen list cards (which are
+  // role=button, tabindex=0). Enter or Space on a focused card opens it,
+  // matching what assistive tech and AI browser extensions expect.
+  document.getElementById('screenSessionList').addEventListener('keydown',e=>{
+    if(e.key!=='Enter'&&e.key!==' ')return;
+    const card=e.target.closest('.scr-card');
+    if(!card)return;
+    e.preventDefault();
+    card.click();
   });
 
   // Swipe back
