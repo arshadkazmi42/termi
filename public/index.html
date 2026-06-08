@@ -508,6 +508,8 @@
     border-radius: var(--r); padding: 14px 16px; cursor: pointer;
     transition: all 0.15s; display: flex; align-items: center; gap: 14px;
     animation: blockIn 0.2s ease; position: relative; overflow: hidden;
+    /* real <button> reset so it matches the old div + is reliably clickable by automation */
+    width: 100%; text-align: left; font: inherit; color: inherit; -webkit-appearance: none; appearance: none;
   }
   .scr-card::after {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -1341,15 +1343,22 @@
   function startScreenRefresh(){stopScreenRefresh();screenRefreshInterval=setInterval(()=>{if(screenPanes.size===0||addingPane)loadScreenSessions();},10000);}
   function stopScreenRefresh(){if(screenRefreshInterval){clearInterval(screenRefreshInterval);screenRefreshInterval=null;}}
 
+  let lastScreenSig=null;
   function renderScreenSessions(sessions){
     const el=document.getElementById('screenSessionList');
     // While panes are open we only re-render the list if the user is picking an extra pane.
     if(screenPanes.size>0&&!addingPane)return;
+    // Skip the innerHTML rebuild when nothing changed, so card nodes keep their
+    // identity between the 10s auto-refreshes. A volatile DOM is what makes
+    // automation / AI extensions click a stale node that's already been replaced.
+    const sig=(addingPane?'A|':'')+sessions.map(s=>s.fullName+':'+s.status+':'+s.pid+(screenPanes.has(s.fullName)?':o':'')).join(',');
+    if(sig===lastScreenSig && el.querySelector('.scr-card')) return;
+    lastScreenSig=sig;
     // When adding a pane, a chip lets the user return to the open panes without picking.
-    const backChip=addingPane?`<div class="scr-card" role="button" tabindex="0" aria-label="Back to panes" onclick="cancelAddPane()" style="justify-content:center;gap:8px">
+    const backChip=addingPane?`<button type="button" class="scr-card" aria-label="Back to panes" data-action="cancel-add" style="justify-content:center;gap:8px">
         <span class="scr-chevron" style="transform:rotate(180deg)">&#8250;</span>
         <div class="scr-name">back to panes</div>
-      </div>`:'';
+      </button>`:'';
     if(!sessions.length){
       el.innerHTML=backChip+`<div class="scr-empty">
         <div class="scr-empty-icon">&gt;_</div>
@@ -1361,7 +1370,7 @@
     el.innerHTML=backChip+sessions.map(s=>{
       const live=s.status==='attached';
       const open=screenPanes.has(s.fullName);
-      return `<div class="scr-card ${live?'live':'idle'}${open?' open':''}" role="button" tabindex="0" aria-label="Open screen session ${escAttr(s.name)}" data-session="${escAttr(s.fullName)}" onclick="screenJoin('${escAttr(s.fullName)}','${escAttr(s.name)}','${s.status}')">
+      return `<button type="button" class="scr-card ${live?'live':'idle'}${open?' open':''}" aria-label="Open screen session ${escAttr(s.name)}" data-session="${escAttr(s.fullName)}" data-name="${escAttr(s.name)}" data-status="${escAttr(s.status)}">
         <div class="scr-icon ${live?'live':'idle'}">&gt;_</div>
         <div class="scr-info">
           <div class="scr-name">${escHtml(s.name)}</div>
@@ -1372,7 +1381,7 @@
           </div>
         </div>
         <div class="scr-chevron">&#8250;</div>
-      </div>`;
+      </button>`;
     }).join('');
   }
 
@@ -1637,15 +1646,15 @@
     if(seq) sendScreenSeq(seq);
   });
 
-  // Keyboard / automation activation for the screen list cards (which are
-  // role=button, tabindex=0). Enter or Space on a focused card opens it,
-  // matching what assistive tech and AI browser extensions expect.
-  document.getElementById('screenSessionList').addEventListener('keydown',e=>{
-    if(e.key!=='Enter'&&e.key!==' ')return;
+  // Delegated activation for the screen list cards (real <button>s). One handler
+  // covers mouse clicks, native Enter/Space (buttons fire click), el.click(), and
+  // synthetic MouseEvents dispatched by AI browser extensions / assistive tech.
+  document.getElementById('screenSessionList').addEventListener('click',e=>{
     const card=e.target.closest('.scr-card');
     if(!card)return;
-    e.preventDefault();
-    card.click();
+    if(card.dataset.action==='cancel-add'){ cancelAddPane(); return; }
+    const fullName=card.dataset.session;
+    if(fullName) screenJoin(fullName, card.dataset.name||'', card.dataset.status||'');
   });
 
   // Swipe back
