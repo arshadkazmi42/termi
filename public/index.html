@@ -1293,6 +1293,28 @@
       ||{fullName,name:prettyName(fullName),status:'detached'};
   }
 
+  // xterm.js has no built-in touch scrolling — its canvas overlays the
+  // scrollable viewport — so translate vertical drags into scrollLines.
+  function enableTouchScroll(term,el){
+    let lastY=null,carry=0;
+    el.addEventListener('touchstart',e=>{
+      if(e.touches.length!==1){lastY=null;return;}
+      lastY=e.touches[0].clientY; carry=0;
+    },{passive:true});
+    el.addEventListener('touchmove',e=>{
+      if(lastY===null||e.touches.length!==1)return;
+      const y=e.touches[0].clientY;
+      const cell=term._core?._renderService?.dimensions?.css?.cell?.height
+        ||(term.rows?el.clientHeight/term.rows:16)||16;
+      carry+=lastY-y; lastY=y;
+      const lines=Math.trunc(carry/cell);
+      if(lines){carry-=lines*cell;term.scrollLines(lines);}
+      if(e.cancelable)e.preventDefault(); // keep the page from panning/bouncing
+    },{passive:false});
+    el.addEventListener('touchend',()=>{lastY=null;},{passive:true});
+    el.addEventListener('touchcancel',()=>{lastY=null;},{passive:true});
+  }
+
   function createPane(fullName){
     const meta=metaFor(fullName);
     const c=$('screenTermContainer');
@@ -1329,6 +1351,7 @@
     // the visible input bar below is the intended typing target.
     const helper=pane.querySelector('.xterm-helper-textarea');
     if(helper)helper.setAttribute('aria-hidden','true');
+    enableTouchScroll(term,pane.querySelector('.scr-pane-term'));
     term.onData(d=>{if(socket)socket.emit('screen:input',{sessionName:fullName,data:d});});
     screenPanes.set(fullName,{term,fit,paneEl:pane,name:meta.name,status:meta.status});
     pane.addEventListener('mousedown',()=>focusPane(fullName));
