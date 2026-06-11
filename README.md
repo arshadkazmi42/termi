@@ -135,7 +135,7 @@ No need to keep any process alive in the background.
 The app opens on the **screens** tab listing all `screen` sessions on the server. Tap a session card to open a live terminal attached to it (`screen -x`, so the session keeps running). In the terminal view:
 
 - The **input bar** at the bottom is always visible — type a line and hit **send** (sends text + Enter) or **type** (sends text without Enter).
-- The **key bar** sends special keys: esc, tab, ^C, ^D, ^Z, arrows, Enter, paste.
+- The **key bar** sends special keys: scroll (screen copy mode — drag or arrows to scroll history, esc to exit), esc, tab, ^C, ^D, ^Z, arrows, pgup/pgdn, Enter, paste.
 - **+ split** (desktop) opens additional sessions side by side, up to 4 panes.
 - **← sessions** goes back to the list. Each view has its own URL, so the browser back button works too.
 
