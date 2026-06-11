@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -49,6 +49,7 @@
   }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
 
   html, body {
     height: 100%; height: 100dvh; background: var(--bg); color: var(--text);
@@ -63,22 +64,6 @@
       radial-gradient(ellipse 600px 400px at 10% 20%, rgba(34,221,136,0.04), transparent),
       radial-gradient(ellipse 500px 500px at 90% 80%, rgba(107,161,255,0.03), transparent),
       radial-gradient(ellipse 400px 300px at 50% 50%, rgba(192,132,252,0.02), transparent);
-  }
-
-  /* ── Ripple Effect ──────────────────────────────── */
-  .ripple { position: relative; overflow: hidden; }
-  .ripple::after {
-    content: ''; position: absolute; border-radius: 50%;
-    background: rgba(255,255,255,0.08); width: 100px; height: 100px;
-    transform: translate(-50%,-50%) scale(0); opacity: 0;
-    pointer-events: none;
-  }
-  .ripple:active::after {
-    animation: rippleAnim 0.5s ease-out;
-  }
-  @keyframes rippleAnim {
-    0% { transform: translate(-50%,-50%) scale(0); opacity: 1; }
-    100% { transform: translate(-50%,-50%) scale(4); opacity: 0; }
   }
 
   /* ── Splash ─────────────────────────────────────── */
@@ -183,15 +168,38 @@
     height: 100%; height: 100dvh; max-width: 800px; margin: 0 auto;
   }
 
-  /* ── Header (Glassmorphism) ──────────────────────── */
+  /* ── Header (logo + tab links + status + menu) ──── */
   .header {
-    display: flex; align-items: center; padding: 10px 14px;
-    padding-top: calc(10px + var(--safe-t));
+    display: flex; align-items: center; padding: 8px 14px;
+    padding-top: calc(8px + var(--safe-t));
     background: rgba(19,19,26,0.75); backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     border-bottom: 1px solid rgba(31,31,46,0.6);
     flex-shrink: 0; gap: 10px; position: relative; z-index: 10;
   }
+  .h-logo {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: linear-gradient(135deg, #22dd88, #1aaf6a);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 700; font-size: 13px; color: #000;
+    flex-shrink: 0;
+  }
+  .h-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px; font-family: var(--mono); font-size: 12px; font-weight: 500;
+    color: var(--dim); background: none; border: 1px solid transparent;
+    border-radius: 9px; cursor: pointer; text-decoration: none;
+    transition: all 0.15s; position: relative;
+  }
+  .tab.active { color: var(--green); background: var(--green-dim); border-color: var(--green-mid); }
+  .tab:active { opacity: 0.7; }
+  .tab-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--orange);
+    display: none;
+  }
+  .tab-dot.on { display: inline-block; }
+
   /* Agent busy spinner in header */
   .h-busy {
     width: 18px; height: 18px; border: 2px solid var(--green-dim);
@@ -200,36 +208,27 @@
   }
   .h-busy.on { display: block; }
   @keyframes hSpin { to { transform: rotate(360deg); } }
-  .h-logo {
-    width: 32px; height: 32px; border-radius: 9px;
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-weight: 700; font-size: 13px; color: #000;
-    flex-shrink: 0;
-  }
-  .h-name { font-family: var(--mono); font-size: 15px; font-weight: 600; flex: 1; }
+
   .h-status {
     display: flex; align-items: center; gap: 6px;
     background: var(--surface2); border: 1px solid var(--border);
     border-radius: 20px; padding: 4px 12px 4px 8px;
     font-family: var(--mono); font-size: 11px; color: var(--text2);
     cursor: pointer; transition: all 0.15s;
-    max-width: 200px; overflow: hidden;
+    max-width: 170px; overflow: hidden; flex-shrink: 0;
   }
-  #statusText {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
+  #statusText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .h-status:active { background: var(--surface3); }
   .h-dot {
     width: 7px; height: 7px; border-radius: 50%; background: var(--dim);
-    transition: all 0.3s;
+    transition: all 0.3s; flex-shrink: 0;
   }
   .h-dot.on { background: var(--green); box-shadow: 0 0 8px var(--green-glow); }
   .h-dot.err { background: var(--red); }
   .h-latency { font-size: 10px; color: var(--dim); }
 
   /* Header menu */
-  .h-menu { position: relative; }
+  .h-menu { position: relative; flex-shrink: 0; }
   .h-btn {
     width: 32px; height: 32px; border-radius: 8px; background: var(--surface2);
     border: 1px solid var(--border); color: var(--text2);
@@ -255,32 +254,24 @@
   .h-drop-item.red { color: var(--red); }
   .h-drop-sep { height: 1px; background: var(--border); margin: 2px 0; }
 
-  /* ── Tabs (Glassmorphism) ────────────────────────── */
-  .tabs {
-    display: flex; background: rgba(19,19,26,0.7); backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-bottom: 1px solid rgba(31,31,46,0.6);
-    flex-shrink: 0; padding: 0 14px;
+  /* ── Views (one active at a time, header stays) ── */
+  .view { display: none; }
+  .view.active {
+    display: flex; flex-direction: column; flex: 1; min-height: 0;
+    animation: viewIn 0.15s ease;
   }
-  .tab {
-    padding: 10px 16px; font-family: var(--mono); font-size: 12px; font-weight: 500;
-    color: var(--dim); background: none; border: none;
-    border-bottom: 2px solid transparent; cursor: pointer;
-    transition: all 0.15s; position: relative;
-  }
-  .tab.active { color: var(--green); border-bottom-color: var(--green); }
-  .tab:active { opacity: 0.7; }
-  .tab-dot {
-    position: absolute; top: 6px; right: 6px;
-    width: 5px; height: 5px; border-radius: 50%; background: var(--orange);
-    display: none;
-  }
-  .tab-dot.on { display: block; }
+  @keyframes viewIn { from { opacity: 0; } to { opacity: 1; } }
 
+  /* ── Chat toolbar (agent switch) ────────────────── */
+  .chat-toolbar {
+    flex-shrink: 0; display: flex; justify-content: flex-end; align-items: center;
+    padding: 6px 14px; gap: 8px;
+    border-bottom: 1px solid var(--border); background: rgba(19,19,26,0.5);
+  }
   .agent-bar {
-    margin-left: auto; display: flex; align-items: center;
+    display: flex; align-items: center;
     background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 8px; padding: 2px; align-self: center;
+    border-radius: 8px; padding: 2px;
   }
   .agent-btn {
     padding: 4px 10px; font-family: var(--mono); font-size: 10px; font-weight: 500;
@@ -443,7 +434,7 @@
   }
   .q-btn:active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
 
-  /* ── Input (Warp-style prompt) ──────────────────── */
+  /* ── Chat input (Warp-style prompt) ─────────────── */
   .prompt-bar {
     flex-shrink: 0; padding: 10px 14px;
     padding-bottom: calc(10px + var(--safe-b));
@@ -473,11 +464,16 @@
   }
   .prompt-send:active { transform: scale(0.9); }
   .prompt-send:disabled { background: var(--surface3); color: var(--dim); }
+  .prompt-send.busy {
+    background: var(--surface3); color: var(--dim); pointer-events: none;
+    animation: sendPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes sendPulse {
+    0%,100% { box-shadow: 0 0 0 0 var(--green-glow); }
+    50% { box-shadow: 0 0 0 6px transparent; }
+  }
 
-  /* ── Screens ────────────────────────────────────── */
-  #screenView { display: none; flex-direction: column; flex: 1; min-height: 0; }
-  #screenView.active { display: flex; }
-
+  /* ── Screens list ───────────────────────────────── */
   .scr-header {
     padding: 14px 14px 6px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: space-between;
@@ -489,10 +485,10 @@
   }
   .scr-refresh {
     background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 6px 10px; cursor: pointer; font-family: var(--mono); font-size: 12px;
+    padding: 6px 10px; cursor: pointer; font-family: var(--mono); font-size: 11px;
     color: var(--text2); transition: all 0.15s;
   }
-  .scr-refresh:active { color: var(--green); transform: rotate(90deg) scale(0.9); }
+  .scr-refresh:active { color: var(--green); transform: scale(0.94); }
 
   #screenSessionList {
     flex: 1; overflow-y: auto; padding: 6px 14px 14px;
@@ -502,14 +498,15 @@
   #screenSessionList::-webkit-scrollbar { width: 3px; }
   #screenSessionList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-  /* Session cards */
+  /* Session cards — real links so navigation works for everything:
+     humans, el.click(), synthetic events, assistive tech, AI agents. */
   .scr-card {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--r); padding: 14px 16px; cursor: pointer;
     transition: all 0.15s; display: flex; align-items: center; gap: 14px;
     animation: blockIn 0.2s ease; position: relative; overflow: hidden;
-    /* real <button> reset so it matches the old div + is reliably clickable by automation */
-    width: 100%; text-align: left; font: inherit; color: inherit; -webkit-appearance: none; appearance: none;
+    width: 100%; text-align: left; font: inherit; color: inherit;
+    text-decoration: none; flex-shrink: 0;
   }
   .scr-card::after {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -518,6 +515,7 @@
   .scr-card.live::after { background: var(--green); }
   .scr-card.idle::after { background: var(--orange); }
   .scr-card:active { background: var(--surface2); transform: scale(0.98); }
+  .scr-card.back-chip { justify-content: center; gap: 8px; }
 
   .scr-icon {
     width: 40px; height: 40px; border-radius: 10px;
@@ -566,47 +564,63 @@
   }
   .scr-empty-hint .g { color: var(--green); }
 
-  /* ── Screen Terminal View ───────────────────────── */
-  #screenTermView {
-    display: none; position: fixed; left: 0; top: 0;
-    width: 100%; height: 100dvh; z-index: 50;
-    flex-direction: column; background: var(--bg);
-    animation: slideRight 0.2s ease;
+  /* ── Skeleton Loading ──────────────────────────── */
+  .skel-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 14px 16px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 14px;
+    animation: blockIn 0.2s ease;
   }
-  #screenTermView.active { display: flex; }
-  @keyframes slideRight { from { transform: translateX(20%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .skel-circle {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
+    background-size: 200% 100%; animation: skelShimmer 1.5s infinite; flex-shrink: 0;
+  }
+  .skel-lines { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .skel-line {
+    height: 10px; border-radius: 5px;
+    background: linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
+    background-size: 200% 100%; animation: skelShimmer 1.5s infinite;
+  }
+  .skel-line:first-child { width: 60%; }
+  .skel-line:last-child { width: 40%; }
+  @keyframes skelShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+  /* ── Terminal view ──────────────────────────────── */
   .stv-header {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 14px; padding-top: calc(8px + var(--safe-t));
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px;
     background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
   }
   .stv-back {
     background: var(--surface2); border: 1px solid var(--border); color: var(--green);
     font-family: var(--mono); font-size: 12px; font-weight: 600;
     padding: 6px 12px; border-radius: 8px; cursor: pointer;
-    display: flex; align-items: center; gap: 5px; transition: all 0.1s;
+    display: inline-flex; align-items: center; gap: 5px; transition: all 0.1s;
+    text-decoration: none; flex-shrink: 0;
   }
   .stv-back:active { background: var(--green); color: #000; }
   .stv-name {
     font-family: var(--mono); font-size: 13px; font-weight: 600; flex: 1;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
   }
-  .stv-status { font-family: var(--mono); font-size: 10px; font-weight: 600; }
+  .stv-status { font-family: var(--mono); font-size: 10px; font-weight: 600; flex-shrink: 0; }
   .stv-status.live { color: var(--green); }
   .stv-status.idle { color: var(--orange); }
 
   #screenTermContainer {
     flex: 1; min-height: 0; padding: 2px; background: var(--bg); overflow: hidden;
     display: grid; gap: 2px;
-    grid-template-columns: 1fr; grid-template-rows: 1fr;
+    grid-template-columns: 1fr; grid-auto-rows: minmax(0, 1fr);
   }
-  /* Split layouts (desktop). One pane = full; 2 = side-by-side; 3-4 = 2x2 grid */
-  #screenTermContainer.panes-2 { grid-template-columns: 1fr 1fr; }
-  #screenTermContainer.panes-3,
-  #screenTermContainer.panes-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-  /* 3 panes: let the last one span both columns of its row */
-  #screenTermContainer.panes-3 .scr-pane:nth-child(3) { grid-column: 1 / -1; }
+  /* Side-by-side splits only where there's width; narrow screens stack rows */
+  @media (min-width: 700px) {
+    #screenTermContainer.panes-2 { grid-template-columns: 1fr 1fr; }
+    #screenTermContainer.panes-3,
+    #screenTermContainer.panes-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    #screenTermContainer.panes-3 .scr-pane:nth-child(3) { grid-column: 1 / -1; }
+  }
+  @media (max-width: 699px) { #addPaneBtn { display: none !important; } }
 
   .scr-pane {
     display: flex; flex-direction: column; min-width: 0; min-height: 0;
@@ -633,20 +647,40 @@
   }
   .scr-pane-close:active { background: var(--red); color: #000; }
   .scr-pane-term { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 1px; }
-  /* "+ pane" affordance only makes sense where there's room to split */
-  #addPaneBtn { display: none; }
-  @media (min-width: 700px) { #addPaneBtn { display: flex; } }
 
-  /* Mobile keybar — special keys above the soft keyboard */
+  /* Terminal input bar — always visible, plain form: works for humans,
+     soft keyboards, and automation alike. */
+  .stv-inputbar {
+    display: flex; flex-shrink: 0; gap: 6px; padding: 6px 8px;
+    background: var(--surface); border-top: 1px solid var(--border);
+    align-items: center;
+  }
+  .stv-input-field {
+    flex: 1; min-width: 0; height: 36px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 13px;
+    border-radius: 8px; padding: 0 12px; outline: none;
+  }
+  .stv-input-field:focus { border-color: var(--green); }
+  .stv-input-send {
+    flex-shrink: 0; height: 36px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text2); font-family: var(--mono); font-size: 12px;
+    font-weight: 600; border-radius: 8px; cursor: pointer; padding: 0 12px;
+    transition: all 0.1s;
+  }
+  .stv-input-send.primary { background: linear-gradient(135deg, #22dd88, #1aaf6a); color: #000; border-color: transparent; }
+  .stv-input-send:active { transform: scale(0.96); }
+
+  /* Special-keys bar — always visible in the terminal view */
   .stv-keybar {
-    display: none; flex-shrink: 0; gap: 6px; padding: 6px 8px;
+    display: flex; flex-shrink: 0; gap: 6px; padding: 6px 8px;
     padding-bottom: calc(6px + var(--safe-b));
     background: var(--surface); border-top: 1px solid var(--border);
     overflow-x: auto; scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
   .stv-keybar::-webkit-scrollbar { display: none; }
-  .stv-keybar.on { display: flex; }
   .stv-key {
     flex-shrink: 0; min-width: 40px; height: 34px;
     background: var(--surface2); border: 1px solid var(--border);
@@ -658,42 +692,20 @@
   .stv-key:active { background: var(--green); color: #000; transform: scale(0.94); }
   .stv-key.kbd { color: var(--green); }
 
-  /* Header toggle showing an "on" state (e.g. the input-bar switch) */
-  .stv-back.on { background: var(--green); color: #000; border-color: var(--green); }
+  /* iOS Safari auto-zooms the page when a focused input's font is under
+     16px, which pans the fixed-height UI off-screen. */
+  @media (pointer: coarse) {
+    .prompt-ta, .stv-input-field, .auth-input, .search-input, #pasteFallback { font-size: 16px; }
+  }
 
-  /* Optional text-input bar — type a line and send it to the focused session */
-  .stv-inputbar {
-    display: none; flex-shrink: 0; gap: 6px; padding: 6px 8px;
-    background: var(--surface); border-top: 1px solid var(--border);
-    align-items: center;
-  }
-  .stv-inputbar.on { display: flex; }
-  .stv-input-field {
-    flex: 1; min-width: 0; height: 34px;
-    background: var(--surface2); border: 1px solid var(--border);
-    color: var(--text); font-family: var(--mono); font-size: 13px;
-    border-radius: 8px; padding: 0 12px; outline: none;
-  }
-  .stv-input-field:focus { border-color: var(--green); }
-  .stv-input-send {
-    flex-shrink: 0; height: 34px;
-    background: var(--surface2); border: 1px solid var(--border);
-    color: var(--green); font-family: var(--mono); font-size: 12px;
-    font-weight: 600; border-radius: 8px; cursor: pointer; padding: 0 14px;
-    transition: all 0.1s;
-  }
-  .stv-input-send:active { background: var(--green); color: #000; transform: scale(0.96); }
-
-  /* Portrait / narrow: compact header + show keybar on touch */
+  /* Portrait / narrow tweaks */
   @media (max-width: 600px) {
-    .stv-header { padding: 6px 10px; padding-top: calc(6px + var(--safe-t)); gap: 8px; }
+    .stv-header { padding: 6px 10px; gap: 6px; }
     .stv-back { padding: 5px 9px; font-size: 11px; }
     .stv-name { font-size: 12px; }
     .stv-status { font-size: 9px; }
     #screenTermContainer { padding: 1px; }
-  }
-  @media (hover: none) and (pointer: coarse) {
-    #screenTermView .stv-keybar { display: flex; }
+    .h-status { max-width: 120px; }
   }
 
   /* ── Scroll-to-bottom FAB ────────────────────────── */
@@ -709,38 +721,6 @@
   .scroll-fab.visible { display: flex; animation: fabIn 0.2s ease; }
   .scroll-fab:active { transform: scale(0.9); background: var(--green); color: #000; }
   @keyframes fabIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
-
-  /* ── Send Button Busy State ─────────────────────── */
-  .prompt-send.busy {
-    background: var(--surface3); color: var(--dim); pointer-events: none;
-    animation: sendPulse 1.2s ease-in-out infinite;
-  }
-  @keyframes sendPulse {
-    0%,100% { box-shadow: 0 0 0 0 var(--green-glow); }
-    50% { box-shadow: 0 0 0 6px transparent; }
-  }
-
-  /* ── Skeleton Loading ──────────────────────────── */
-  .skel-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--r); padding: 14px 16px;
-    display: flex; align-items: center; gap: 14px;
-    animation: blockIn 0.2s ease;
-  }
-  .skel-circle {
-    width: 40px; height: 40px; border-radius: 10px;
-    background: linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
-    background-size: 200% 100%; animation: skelShimmer 1.5s infinite; flex-shrink: 0;
-  }
-  .skel-lines { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-  .skel-line {
-    height: 10px; border-radius: 5px;
-    background: linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
-    background-size: 200% 100%; animation: skelShimmer 1.5s infinite;
-  }
-  .skel-line:first-child { width: 60%; }
-  .skel-line:last-child { width: 40%; }
-  @keyframes skelShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
   /* ── Animated Success / Error ──────────────────── */
   .anim-check, .anim-x {
@@ -809,7 +789,7 @@
   /* ── Desktop ────────────────────────────────────── */
   @media (min-width: 600px) {
     #app { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
-    .header { padding: 12px 18px; }
+    .header { padding: 10px 18px; }
     #messages { padding: 18px; }
     .prompt-bar { padding: 12px 18px; }
     .cmd-output .copy-btn { opacity: 0.5; }
@@ -830,34 +810,37 @@
 </div>
 
 <!-- Toast -->
-<div id="toast"></div>
-<textarea id="pasteFallback" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="paste here, then tap away"></textarea>
+<div id="toast" role="status"></div>
+<textarea id="pasteFallback" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="paste here, then tap away" aria-label="Manual paste area"></textarea>
 
 <!-- Reconnect -->
 <div id="reconnectBanner">connection lost - reconnecting...</div>
 
 <!-- Auth -->
 <div id="auth" style="display:none">
-  <div class="auth-card">
+  <form class="auth-card" onsubmit="authenticate(event)">
     <div class="auth-head">
       <div class="auth-icon">t_</div>
-      <div class="auth-title">termi</div>
+      <h1 class="auth-title">termi</h1>
     </div>
     <div class="auth-desc">Enter your access token to connect to the remote agent.</div>
     <div class="auth-field">
-      <div class="auth-label">Access Token</div>
+      <label class="auth-label" for="tokenInput">Access Token</label>
       <input type="password" class="auth-input" id="tokenInput" placeholder="paste token here" autocomplete="current-password" />
       <div class="auth-error" id="authError"></div>
     </div>
-    <button class="auth-btn" onclick="authenticate()">Connect</button>
-  </div>
+    <button type="submit" class="auth-btn">Connect</button>
+  </form>
 </div>
 
 <!-- App -->
 <div id="app">
-  <div class="header">
+  <header class="header">
     <div class="h-logo">t_</div>
-    <div class="h-name">termi</div>
+    <nav class="h-tabs" aria-label="Main navigation">
+      <a class="tab active" id="tab-screens" href="#/screens">screens <span class="tab-dot" id="screenBadge"></span></a>
+      <a class="tab" id="tab-chat" href="#/chat">chat</a>
+    </nav>
     <div class="h-busy" id="busySpinner"></div>
     <div class="h-status" onclick="showLatency()">
       <span class="h-dot" id="statusDot"></span>
@@ -865,7 +848,7 @@
       <span class="h-latency" id="latencyText"></span>
     </div>
     <div class="h-menu">
-      <button class="h-btn" onclick="toggleMenu()">&#8943;</button>
+      <button class="h-btn" onclick="toggleMenu()" aria-label="Menu">&#8943;</button>
       <div class="h-drop" id="headerMenu">
         <button class="h-drop-item" onclick="toggleSearch(); closeMenu()">&#128269; Search</button>
         <button class="h-drop-item" onclick="resetSession(); closeMenu()">&#8634; Reset session</button>
@@ -882,179 +865,212 @@
         <button class="h-drop-item red" onclick="logout(); closeMenu()">&#9211; Logout</button>
       </div>
     </div>
-  </div>
+  </header>
 
-  <div class="tabs">
-    <button class="tab active" id="tab-chat" onclick="setMode('chat')">chat</button>
-    <button class="tab" id="tab-screens" onclick="setMode('screens')">screens <span class="tab-dot" id="screenBadge"></span></button>
-    <div class="agent-bar">
-      <button class="agent-btn active" id="opt-agent" onclick="switchAgent('agent')">cursor</button>
-      <button class="agent-btn" id="opt-claude" onclick="switchAgent('claude')">claude</button>
+  <!-- ── Screens: session list (default view) ─────── -->
+  <section class="view active" id="view-screens">
+    <div class="scr-header">
+      <h2 class="scr-title"><span id="scrTitleText">sessions</span> <span class="scr-count" id="screenCount">0</span></h2>
+      <button class="scr-refresh" onclick="refreshScreens()" aria-label="Refresh session list">&#8635; refresh</button>
     </div>
-  </div>
+    <div id="screenSessionList">
+      <a id="backToPanes" class="scr-card back-chip" href="#/screens" hidden aria-label="Back to open terminal panes">
+        <span class="scr-chevron" style="transform:rotate(180deg)">&#8250;</span>
+        <div class="scr-name">back to open panes</div>
+      </a>
+      <div id="screenSkeletons" hidden>
+        <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
+        <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
+        <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
+      </div>
+      <div id="screenEmpty" class="scr-empty" hidden>
+        <div class="scr-empty-icon">&gt;_</div>
+        <div class="scr-empty-text">No active screen sessions</div>
+        <div class="scr-empty-hint"><span class="g">$</span> screen -S &lt;name&gt;</div>
+      </div>
+    </div>
+  </section>
 
-  <div class="search-bar" id="searchBar">
-    <input class="search-input" id="searchInput" placeholder="search messages..." oninput="filterMessages(this.value)">
-    <button class="search-close" onclick="toggleSearch()">&times;</button>
-  </div>
+  <!-- ── Terminal view ─────────────────────────────── -->
+  <section class="view" id="view-term">
+    <div class="stv-header">
+      <a class="stv-back" href="#/screens" aria-label="Back to session list">&#8592; sessions</a>
+      <h2 class="stv-name" id="termName"></h2>
+      <span class="stv-status" id="termStatus" role="status"></span>
+      <a class="stv-back" id="addPaneBtn" href="#/screens" hidden aria-label="Open another session in a split pane" style="padding:5px 9px">+ split</a>
+      <button type="button" class="stv-back" onclick="screenFocusInput()" aria-label="Focus the terminal for direct keyboard typing" style="padding:5px 9px">kbd</button>
+    </div>
+    <div id="screenTermContainer" class="panes-1"></div>
+    <form class="stv-inputbar" id="termInputForm">
+      <input type="text" id="termInput" class="stv-input-field" placeholder="type a command..."
+        aria-label="Terminal input" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" />
+      <button type="button" class="stv-input-send" id="termTypeBtn" aria-label="Type text into terminal without pressing Enter">type</button>
+      <button type="submit" class="stv-input-send primary" aria-label="Send text to terminal and press Enter">send</button>
+    </form>
+    <div class="stv-keybar" id="screenKeybar" role="toolbar" aria-label="Terminal special keys">
+      <button type="button" class="stv-key" data-seq="esc" aria-label="Send Escape key">esc</button>
+      <button type="button" class="stv-key" data-seq="tab" aria-label="Send Tab key">tab</button>
+      <button type="button" class="stv-key" data-seq="s-tab" aria-label="Send Shift Tab">&#8679;tab</button>
+      <button type="button" class="stv-key" data-seq="c-c" aria-label="Send Ctrl+C interrupt">^C</button>
+      <button type="button" class="stv-key" data-seq="c-d" aria-label="Send Ctrl+D">^D</button>
+      <button type="button" class="stv-key" data-seq="c-z" aria-label="Send Ctrl+Z">^Z</button>
+      <button type="button" class="stv-key" data-seq="up" aria-label="Send Arrow Up">&uarr;</button>
+      <button type="button" class="stv-key" data-seq="down" aria-label="Send Arrow Down">&darr;</button>
+      <button type="button" class="stv-key" data-seq="left" aria-label="Send Arrow Left">&larr;</button>
+      <button type="button" class="stv-key" data-seq="right" aria-label="Send Arrow Right">&rarr;</button>
+      <button type="button" class="stv-key" data-seq="cr" aria-label="Send Enter key">&crarr;</button>
+      <button type="button" class="stv-key kbd" data-action="paste" aria-label="Paste clipboard into terminal">paste</button>
+    </div>
+  </section>
 
-  <div class="queue-bar" id="queueBanner"><span class="queue-n" id="queueCount">0</span> tasks queued</div>
+  <!-- ── Chat with the agent ───────────────────────── -->
+  <section class="view" id="view-chat">
+    <div class="chat-toolbar">
+      <div class="agent-bar">
+        <button class="agent-btn active" id="opt-agent" onclick="switchAgent('agent')" aria-label="Use Cursor agent">cursor</button>
+        <button class="agent-btn" id="opt-claude" onclick="switchAgent('claude')" aria-label="Use Claude Code agent">claude</button>
+      </div>
+    </div>
 
-  <div id="messages">
-    <div class="welcome" id="welcomeCard">
-      <div class="welcome-badge">
-        <div class="welcome-top">$ termi ready</div>
-        <div class="welcome-sub">Your remote agent is connected. Send a command or pick one below.</div>
-        <div class="welcome-grid">
-          <button class="wg-btn" onclick="quick('server status')"><span class="wg-icon">&#9670;</span> status</button>
-          <button class="wg-btn" onclick="quick('show running processes')"><span class="wg-icon">&#9654;</span> processes</button>
-          <button class="wg-btn" onclick="quick('disk usage')"><span class="wg-icon">&#9632;</span> disk</button>
-          <button class="wg-btn" onclick="quick('git status')"><span class="wg-icon">&#10132;</span> git</button>
-          <button class="wg-btn" onclick="quick('show recent logs')"><span class="wg-icon">&#9776;</span> logs</button>
-          <button class="wg-btn" onclick="quick('deploy latest changes')"><span class="wg-icon">&#9650;</span> deploy</button>
+    <div class="search-bar" id="searchBar">
+      <input class="search-input" id="searchInput" placeholder="search messages..." aria-label="Search messages" oninput="filterMessages(this.value)">
+      <button class="search-close" onclick="toggleSearch()" aria-label="Close search">&times;</button>
+    </div>
+
+    <div class="queue-bar" id="queueBanner"><span class="queue-n" id="queueCount">0</span> tasks queued</div>
+
+    <div id="messages">
+      <div class="welcome" id="welcomeCard">
+        <div class="welcome-badge">
+          <div class="welcome-top">$ termi ready</div>
+          <div class="welcome-sub">Your remote agent is connected. Send a command or pick one below.</div>
+          <div class="welcome-grid">
+            <button class="wg-btn" onclick="quick('server status')"><span class="wg-icon">&#9670;</span> status</button>
+            <button class="wg-btn" onclick="quick('show running processes')"><span class="wg-icon">&#9654;</span> processes</button>
+            <button class="wg-btn" onclick="quick('disk usage')"><span class="wg-icon">&#9632;</span> disk</button>
+            <button class="wg-btn" onclick="quick('git status')"><span class="wg-icon">&#10132;</span> git</button>
+            <button class="wg-btn" onclick="quick('show recent logs')"><span class="wg-icon">&#9776;</span> logs</button>
+            <button class="wg-btn" onclick="quick('deploy latest changes')"><span class="wg-icon">&#9650;</span> deploy</button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="quickbar" id="quickRow">
-    <button class="q-btn" onclick="quick('worker status')">worker</button>
-    <button class="q-btn" onclick="quick('server status')">status</button>
-    <button class="q-btn" onclick="quick('show running processes')">ps</button>
-    <button class="q-btn" onclick="quick('disk usage')">disk</button>
-    <button class="q-btn" onclick="quick('show recent logs')">logs</button>
-    <button class="q-btn" onclick="quick('git status')">git</button>
-    <button class="q-btn" onclick="quick('deploy latest changes')">deploy</button>
-  </div>
-
-  <!-- Screen Sessions -->
-  <div id="screenView">
-    <div class="scr-header">
-      <div class="scr-title">Sessions <span class="scr-count" id="screenCount">0</span></div>
-      <button class="scr-refresh" onclick="refreshScreens()">&#8635;</button>
+    <div class="quickbar" id="quickRow">
+      <button class="q-btn" onclick="quick('worker status')">worker</button>
+      <button class="q-btn" onclick="quick('server status')">status</button>
+      <button class="q-btn" onclick="quick('show running processes')">ps</button>
+      <button class="q-btn" onclick="quick('disk usage')">disk</button>
+      <button class="q-btn" onclick="quick('show recent logs')">logs</button>
+      <button class="q-btn" onclick="quick('git status')">git</button>
+      <button class="q-btn" onclick="quick('deploy latest changes')">deploy</button>
     </div>
-    <div id="screenSessionList"></div>
-  </div>
 
-  <div class="prompt-bar" id="mainInputArea">
-    <div class="prompt-wrap">
-      <span class="prompt-chevron">&gt;</span>
-      <textarea id="input" class="prompt-ta" placeholder="type a command..." rows="1"
-        onkeydown="onKey(event)" oninput="resizeTA(this)"></textarea>
+    <div class="prompt-bar" id="mainInputArea">
+      <div class="prompt-wrap">
+        <span class="prompt-chevron">&gt;</span>
+        <textarea id="input" class="prompt-ta" placeholder="type a command..." rows="1" aria-label="Message to agent"
+          onkeydown="onKey(event)" oninput="resizeTA(this)"></textarea>
+      </div>
+      <button class="prompt-send" id="sendBtn" onclick="send()" disabled aria-label="Send message to agent">&#8593;</button>
     </div>
-    <button class="prompt-send" id="sendBtn" onclick="send()" disabled>&#8593;</button>
-  </div>
+  </section>
 </div>
 
 <!-- Scroll to bottom FAB -->
-<button class="scroll-fab" id="scrollFab" onclick="scrollToBottom()">&#8595;</button>
-
-<!-- Screen Terminal View -->
-<div id="screenTermView">
-  <div class="stv-header">
-    <button class="stv-back" onclick="screenGoBack()">&#8592; back</button>
-    <div class="stv-name" id="screenTermName"></div>
-    <div class="stv-status" id="screenTermStatus"></div>
-    <button class="stv-back" id="addPaneBtn" onclick="screenAddPane()" title="Open another session in a split pane" style="padding:5px 9px">+ pane</button>
-    <button class="stv-back" id="inputToggleBtn" onclick="toggleInputBar()" title="Toggle the text input bar" style="padding:5px 9px">input</button>
-    <button class="stv-back" onclick="screenFocusInput()" title="Show keyboard" style="padding:5px 9px">kbd</button>
-  </div>
-  <div id="screenTermContainer"></div>
-  <form class="stv-inputbar" id="screenInputBar" onsubmit="sendInputBar(event)">
-    <input type="text" id="screenInputField" class="stv-input-field" placeholder="type input, Enter to send" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" />
-    <button type="submit" class="stv-input-send">send</button>
-  </form>
-  <div class="stv-keybar" id="screenKeybar">
-    <button class="stv-key" data-seq="esc">esc</button>
-    <button class="stv-key" data-seq="tab">tab</button>
-    <button class="stv-key" data-seq="s-tab">&#8679;tab</button>
-    <button class="stv-key" data-seq="c-c">^C</button>
-    <button class="stv-key" data-seq="c-d">^D</button>
-    <button class="stv-key" data-seq="c-z">^Z</button>
-    <button class="stv-key" data-seq="up">&uarr;</button>
-    <button class="stv-key" data-seq="down">&darr;</button>
-    <button class="stv-key" data-seq="left">&larr;</button>
-    <button class="stv-key" data-seq="right">&rarr;</button>
-    <button class="stv-key" data-seq="cr">&crarr;</button>
-    <button class="stv-key kbd" data-action="paste" title="Paste from clipboard">paste</button>
-  </div>
-</div>
+<button class="scroll-fab" id="scrollFab" onclick="scrollToBottom()" aria-label="Scroll to latest messages">&#8595;</button>
 
 <script>
-  let socket=null, token='', mode='chat', connected=false, thinkingEl=null;
+  // ── State ───────────────────────────────────────────
+  let socket=null, token='', connected=false, thinkingEl=null;
   let activeAgent='agent', lastThinkingContent='', latencyMs=null, latencyInterval=null;
-  // Screen panes: support multiple sessions side-by-side on wide screens.
-  // Map fullName -> { term, fit, paneEl, name, status }. On mobile we keep a single pane.
-  const screenPanes=new Map();
-  let focusedScreen=null;   // fullName of the pane that receives keybar / keyboard input
-  let addingPane=false;     // true while the session list is shown to pick an extra pane
-  let screenResizeBound=false;
+  // Route fully describes what's on screen:
+  //   #/screens                  → session list (the default tab)
+  //   #/screen/<a>[,<b>...]      → terminal view with those panes open
+  //   #/screens/add/<a>[,<b>]    → session list shown to pick an extra pane, panes kept alive
+  //   #/chat                     → agent chat
+  // Every navigation is a URL change, so links/back-button/automation all agree.
+  let route={view:'screens',sessions:[],add:false};
+  const screenPanes=new Map(); // fullName -> { term, fit, paneEl, name, status }
+  let focusedScreen=null;      // fullName of the pane that receives input
+  let pendingFocus=null;       // pane to focus after the next route sync
+  let sessionCache=[];         // last screen:list payload
+  let listLoaded=false;
   let screenRefreshInterval=null;
   const MAX_PANES=4;
-  function canSplit(){ return window.innerWidth>=700; }
   let swipeStartX=0, swipeStartY=0;
-  let lastInputMsg = '';
+  let lastInputMsg='';
   let autoScroll=true, agentBusy=false;
-  let currentTheme = localStorage.getItem('termi_theme') || 'green';
+  let currentTheme=localStorage.getItem('termi_theme')||'green';
+
+  const $=id=>document.getElementById(id);
 
   function haptic(s) { if(navigator.vibrate) navigator.vibrate(s==='light'?10:s==='medium'?20:30); }
 
   let toastTimer=null;
   function showToast(m) {
-    const e=document.getElementById('toast'); e.textContent=m;
+    const e=$('toast'); e.textContent=m;
     e.classList.add('visible'); clearTimeout(toastTimer);
     toastTimer=setTimeout(()=>e.classList.remove('visible'),2000);
   }
 
   function hideSplash() {
-    const s=document.getElementById('splash'); s.classList.add('hidden');
+    const s=$('splash'); s.classList.add('hidden');
     setTimeout(()=>s.style.display='none',600);
   }
 
-  // Auth
-  function authenticate() {
-    const t=document.getElementById('tokenInput').value.trim();
-    if(!t){document.getElementById('authError').textContent='Token required';return;}
+  // ── Auth ────────────────────────────────────────────
+  function authenticate(e) {
+    if(e)e.preventDefault();
+    const t=$('tokenInput').value.trim();
+    if(!t){$('authError').textContent='Token required';return;}
     token=t; localStorage.setItem('termi_token',t);
-    document.getElementById('auth').style.display='none'; haptic('medium'); initSocket();
+    $('auth').style.display='none'; haptic('medium'); initSocket();
   }
   function logout() { localStorage.removeItem('termi_token'); localStorage.removeItem('termi_history'); if(socket)socket.disconnect(); location.reload(); }
 
-  // Menu
-  function toggleMenu() { haptic('light'); document.getElementById('headerMenu').classList.toggle('open'); }
-  function closeMenu() { document.getElementById('headerMenu').classList.remove('open'); }
+  // ── Menu ────────────────────────────────────────────
+  function toggleMenu() { haptic('light'); $('headerMenu').classList.toggle('open'); }
+  function closeMenu() { $('headerMenu').classList.remove('open'); }
   document.addEventListener('click',e=>{ if(!e.target.closest('.h-menu'))closeMenu(); });
 
-  // Socket
+  // ── Socket ──────────────────────────────────────────
   function initSocket() {
     socket=io({ auth:{token}, reconnection:true, reconnectionDelay:1000, reconnectionAttempts:Infinity });
 
     socket.on('connect',()=>{
-      document.getElementById('reconnectBanner').classList.remove('visible');
+      $('reconnectBanner').classList.remove('visible');
       socket.emit('init'); startLatencyPing();
+      // Server-side ptys die when the socket drops — re-attach any open panes.
+      screenPanes.forEach((p,k)=>{
+        socket.emit('screen:join',{sessionName:k,cols:p.term.cols||80,rows:p.term.rows||24});
+      });
     });
     socket.on('disconnect',()=>{
       connected=false; setStatus('err','offline');
-      document.getElementById('reconnectBanner').classList.add('visible'); stopLatencyPing();
+      $('reconnectBanner').classList.add('visible'); stopLatencyPing(); stopScreenRefresh();
     });
     socket.on('reconnect',()=>{
-      document.getElementById('reconnectBanner').classList.remove('visible');
+      $('reconnectBanner').classList.remove('visible');
       socket.emit('init'); showToast('reconnected');
     });
     socket.on('connect_error',err=>{
       if(err.message==='Unauthorized'){
-        hideSplash(); document.getElementById('auth').style.display='flex';
-        document.getElementById('authError').textContent='Invalid token';
+        hideSplash(); $('auth').style.display='flex';
+        $('authError').textContent='Invalid token';
       }
     });
     socket.on('status',({connected:c,message,agentType,agentAvail,claudeAvail})=>{
       connected=c; hideSplash();
       setStatus(c?'on':'err',c?message:'offline');
       if(c){
-        document.getElementById('sendBtn').disabled=false;
+        $('sendBtn').disabled=false;
         if(agentType)setAgentUI(agentType);
-        if(agentAvail===false)document.getElementById('opt-agent').disabled=true;
-        if(claudeAvail===false)document.getElementById('opt-claude').disabled=true;
+        if(agentAvail===false)$('opt-agent').disabled=true;
+        if(claudeAvail===false)$('opt-claude').disabled=true;
+        startScreenRefresh();
+        applyRoute();           // open any panes the URL asks for (deep link / reload)
+        loadScreenSessions();
       }
     });
     socket.on('agentSwitched',({agentType})=>{
@@ -1079,24 +1095,20 @@
       }
     });
     socket.on('queue',q=>{
-      const b=document.getElementById('queueBanner');
-      if(q.length>0){b.classList.add('on');document.getElementById('queueCount').textContent=q.length;}
+      const b=$('queueBanner');
+      if(q.length>0){b.classList.add('on');$('queueCount').textContent=q.length;}
       else b.classList.remove('on');
     });
-    socket.on('screen:list',({sessions})=>{
-      document.getElementById('screenBadge').classList.toggle('on',sessions.length>0&&mode!=='screens');
-      document.getElementById('screenCount').textContent=sessions.length;
-      renderScreenSessions(sessions);
-    });
+    socket.on('screen:list',({sessions})=>{ renderScreenList(sessions); });
     socket.on('screen:output',({sessionName,data})=>{
       const p=sessionName?screenPanes.get(sessionName):null;
       if(p){ p.term.write(data); }
       else if(!sessionName&&screenPanes.size===1){ screenPanes.values().next().value.term.write(data); } // back-compat
     });
-    socket.on('screen:exit',({sessionName})=>{ if(screenPanes.has(sessionName))closePane(sessionName); });
+    socket.on('screen:exit',({sessionName})=>{ handleScreenExit(sessionName); });
   }
 
-  // Latency
+  // ── Latency ─────────────────────────────────────────
   function startLatencyPing(){stopLatencyPing();measureLatency();latencyInterval=setInterval(measureLatency,15000);}
   function stopLatencyPing(){if(latencyInterval){clearInterval(latencyInterval);latencyInterval=null;}}
   function measureLatency(){
@@ -1104,24 +1116,439 @@
     const s=Date.now();
     socket.volatile.emit('ping',null,()=>{
       latencyMs=Date.now()-s;
-      document.getElementById('latencyText').textContent=latencyMs+'ms';
+      $('latencyText').textContent=latencyMs+'ms';
     });
   }
   function showLatency(){haptic('light');measureLatency();}
   function resetSession(){if(!socket)return;haptic('medium');socket.emit('reset');showToast('session reset');}
 
-  // Messages
-  function hideWelcome(){const w=document.getElementById('welcomeCard');if(w)w.style.display='none';}
+  // ── Router ──────────────────────────────────────────
+  function parseHash(){
+    const raw=(location.hash||'').replace(/^#\/?/,'');
+    const parts=raw.split('/');
+    const dec=s=>(s||'').split(',').map(decodeURIComponent).filter(Boolean).slice(0,MAX_PANES);
+    if(parts[0]==='chat') return {view:'chat',sessions:[],add:false};
+    if(parts[0]==='screen'&&parts[1]) return {view:'term',sessions:dec(parts[1]),add:false};
+    if(parts[0]==='screens'&&parts[1]==='add'&&parts[2]) return {view:'screens',sessions:dec(parts[2]),add:true};
+    return {view:'screens',sessions:[],add:false};
+  }
+  function termHash(list){ return '#/screen/'+list.map(encodeURIComponent).join(','); }
+  function prettyName(fullName){ const i=fullName.indexOf('.'); return i>0?fullName.slice(i+1):fullName; }
+
+  function applyRoute(){
+    route=parseHash();
+    if(route.view==='term'&&!route.sessions.length){
+      history.replaceState(null,'','#/screens');
+      route=parseHash();
+    }
+    const r=route;
+    $('tab-screens').classList.toggle('active',r.view!=='chat');
+    $('tab-chat').classList.toggle('active',r.view==='chat');
+    $('view-screens').classList.toggle('active',r.view==='screens');
+    $('view-term').classList.toggle('active',r.view==='term');
+    $('view-chat').classList.toggle('active',r.view==='chat');
+
+    if(r.view==='chat'){
+      syncPanes([]);
+      document.title='termi — chat';
+    } else if(r.view==='screens'){
+      // In add-mode the open panes stay alive behind the list.
+      syncPanes(r.add?r.sessions:[]);
+      updateScreensChrome();
+      loadScreenSessions();
+      document.title='termi — sessions';
+    } else {
+      $('screenBadge').classList.remove('on');
+      syncPanes(r.sessions);
+      document.title='termi — '+prettyName(r.sessions[0]);
+    }
+    updateAddPaneBtn();
+    applyViewportHeight();
+    if(r.view==='term'){ setTimeout(refitAllPanes,60); setTimeout(refitAllPanes,220); }
+  }
+
+  function updateScreensChrome(){
+    $('scrTitleText').textContent=route.add?'add split pane':'sessions';
+    const back=$('backToPanes');
+    back.hidden=!route.add;
+    if(route.add)back.setAttribute('href',termHash(route.sessions));
+    if(listLoaded)renderScreenList(sessionCache);
+  }
+
+  function updateAddPaneBtn(){
+    const b=$('addPaneBtn');
+    const can=route.view==='term'&&route.sessions.length>0&&route.sessions.length<MAX_PANES;
+    b.hidden=!can;
+    if(can)b.setAttribute('href','#/screens/add/'+route.sessions.map(encodeURIComponent).join(','));
+  }
+
+  // ── Session list ────────────────────────────────────
+  function loadScreenSessions(){
+    if(!socket||!connected)return;
+    if(!listLoaded)$('screenSkeletons').hidden=false;
+    socket.emit('screen:list');
+  }
+  function refreshScreens(){haptic('light');showToast('refreshing...');loadScreenSessions();}
+  function startScreenRefresh(){
+    stopScreenRefresh();
+    screenRefreshInterval=setInterval(()=>{ if(route.view!=='chat')loadScreenSessions(); },5000);
+  }
+  function stopScreenRefresh(){if(screenRefreshInterval){clearInterval(screenRefreshInterval);screenRefreshInterval=null;}}
+
+  function cssEsc(s){ return (window.CSS&&CSS.escape)?CSS.escape(s):String(s).replace(/["\\]/g,'\\$&'); }
+
+  function cardHref(s){
+    if(!route.add) return termHash([s.fullName]);
+    if(route.sessions.includes(s.fullName)) return termHash(route.sessions); // already open → back to panes
+    return termHash(route.sessions.concat(s.fullName));
+  }
+
+  function buildCard(s){
+    const a=document.createElement('a');
+    a.className='scr-card';
+    a.dataset.session=s.fullName;
+    a.innerHTML=`<div class="scr-icon">&gt;_</div>
+      <div class="scr-info">
+        <div class="scr-name"></div>
+        <div class="scr-meta"><span class="scr-badge"></span><span class="scr-pid"></span><span class="scr-badge live scr-open" hidden>open</span></div>
+      </div>
+      <div class="scr-chevron">&#8250;</div>`;
+    a.querySelector('.scr-name').textContent=s.name;
+    return a;
+  }
+
+  function updateCard(a,s){
+    const live=s.status==='attached';
+    const open=route.add&&route.sessions.includes(s.fullName);
+    a.classList.toggle('live',live);
+    a.classList.toggle('idle',!live);
+    a.setAttribute('href',cardHref(s));
+    a.setAttribute('aria-label',(open?'Focus open session ':'Open screen session ')+s.name);
+    a.dataset.open=open?'1':'0';
+    a.querySelector('.scr-icon').className='scr-icon '+(live?'live':'idle');
+    const b=a.querySelector('.scr-badge');
+    b.className='scr-badge '+(live?'live':'idle');
+    b.textContent=live?'live':'idle';
+    a.querySelector('.scr-pid').textContent='pid '+s.pid;
+    a.querySelector('.scr-open').hidden=!open;
+  }
+
+  // In-place keyed rendering: card nodes keep their identity between the 5s
+  // auto-refreshes, so a click never lands on a node that was just replaced.
+  function renderScreenList(sessions){
+    sessionCache=sessions; listLoaded=true;
+    $('screenSkeletons').hidden=true;
+    $('screenCount').textContent=sessions.length;
+    $('screenBadge').classList.toggle('on',sessions.length>0&&route.view==='chat');
+    const list=$('screenSessionList');
+    const seen=new Set();
+    sessions.forEach(s=>{
+      seen.add(s.fullName);
+      let card=list.querySelector(`a.scr-card[data-session="${cssEsc(s.fullName)}"]`);
+      if(!card){ card=buildCard(s); list.appendChild(card); }
+      else if(card.querySelector('.scr-name').textContent!==s.name){ card.querySelector('.scr-name').textContent=s.name; }
+      updateCard(card,s);
+    });
+    list.querySelectorAll('a.scr-card[data-session]').forEach(c=>{ if(!seen.has(c.dataset.session))c.remove(); });
+    $('screenEmpty').hidden=sessions.length>0;
+    // keep open panes' status badges fresh
+    screenPanes.forEach((p,k)=>{
+      const s=sessions.find(x=>x.fullName===k);
+      if(s&&p.status!==s.status){
+        p.status=s.status;
+        const st=p.paneEl.querySelector('.scr-pane-st');
+        const live=s.status==='attached';
+        if(st){ st.className='scr-pane-st '+(live?'live':'idle'); st.textContent=live?'live':'idle'; }
+      }
+    });
+    updateTermBar();
+  }
+
+  // Cards are real links; this handler only covers the two extras links can't:
+  // focusing a pane that's already open, and re-applying a same-hash navigation.
+  $('screenSessionList').addEventListener('click',e=>{
+    const card=e.target.closest('a.scr-card[data-session]');
+    if(!card)return;
+    haptic('light');
+    if(card.dataset.open==='1')pendingFocus=card.dataset.session;
+    if(location.hash===card.getAttribute('href'))setTimeout(applyRoute,0);
+  });
+
+  // ── Terminal panes ──────────────────────────────────
+  function syncPanes(desired){
+    const want=new Set(desired);
+    [...screenPanes.keys()].forEach(k=>{ if(!want.has(k))removePane(k,true); });
+    if(desired.length===0){ focusedScreen=null; updateTermBar(); return; }
+    if(!connected)return; // applyRoute() runs again once the socket is up
+    desired.forEach(k=>{ if(!screenPanes.has(k))createPane(k); });
+    updatePaneGrid();
+    let focus=(pendingFocus&&screenPanes.has(pendingFocus))?pendingFocus
+      :(screenPanes.has(focusedScreen)?focusedScreen:desired[desired.length-1]);
+    pendingFocus=null;
+    if(screenPanes.has(focus))focusPane(focus);
+  }
+
+  function metaFor(fullName){
+    return sessionCache.find(x=>x.fullName===fullName)
+      ||{fullName,name:prettyName(fullName),status:'detached'};
+  }
+
+  function createPane(fullName){
+    const meta=metaFor(fullName);
+    const c=$('screenTermContainer');
+    const pane=document.createElement('div');
+    pane.className='scr-pane'; pane.dataset.session=fullName;
+    const live=meta.status==='attached';
+    pane.innerHTML=`<div class="scr-pane-bar">
+        <span class="scr-pane-name"></span>
+        <span class="scr-pane-st ${live?'live':'idle'}">${live?'live':'idle'}</span>
+        <button type="button" class="scr-pane-close">&times;</button>
+      </div>
+      <div class="scr-pane-term" role="log"></div>`;
+    pane.querySelector('.scr-pane-name').textContent=meta.name;
+    pane.querySelector('.scr-pane-close').setAttribute('aria-label','Close pane '+meta.name);
+    pane.querySelector('.scr-pane-term').setAttribute('aria-label','Terminal output for '+meta.name);
+    c.appendChild(pane);
+    const term=new Terminal({
+      cursorBlink:true, cursorStyle:'block', fontSize:screenTermFontSize(screenPanes.size+1),
+      fontFamily:'JetBrains Mono, SF Mono, monospace',
+      theme:{
+        background:'#0b0b0f',foreground:'#e8e8ef',cursor:'#22dd88',
+        selectionBackground:'#6ba1ff44',
+        black:'#0b0b0f',red:'#ff6b6b',green:'#22dd88',yellow:'#ffb347',
+        blue:'#6ba1ff',magenta:'#c084fc',cyan:'#22d3ee',white:'#e8e8ef',
+        brightBlack:'#555568',brightRed:'#ff8a80',brightGreen:'#69f0ae',
+        brightYellow:'#ffd740',brightBlue:'#82b1ff',brightMagenta:'#ea80fc',
+        brightCyan:'#84ffff',brightWhite:'#ffffff',
+      },
+      scrollback:5000, allowProposedApi:true,
+    });
+    const fit=new FitAddon.FitAddon();
+    term.loadAddon(fit); term.open(pane.querySelector('.scr-pane-term'));
+    // xterm's hidden helper textarea confuses accessibility/automation snapshots;
+    // the visible input bar below is the intended typing target.
+    const helper=pane.querySelector('.xterm-helper-textarea');
+    if(helper)helper.setAttribute('aria-hidden','true');
+    term.onData(d=>{if(socket)socket.emit('screen:input',{sessionName:fullName,data:d});});
+    screenPanes.set(fullName,{term,fit,paneEl:pane,name:meta.name,status:meta.status});
+    pane.addEventListener('mousedown',()=>focusPane(fullName));
+    pane.addEventListener('touchstart',()=>focusPane(fullName),{passive:true});
+    pane.querySelector('.scr-pane-close').addEventListener('click',e=>{
+      e.stopPropagation(); e.preventDefault(); closePaneNav(fullName);
+    });
+    updatePaneGrid();
+    socket.emit('screen:join',{sessionName:fullName,cols:term.cols||80,rows:term.rows||24});
+    const sync=()=>{try{fit.fit();socket.emit('screen:resize',{sessionName:fullName,cols:term.cols,rows:term.rows});}catch(_){}};
+    setTimeout(sync,120); setTimeout(sync,320);
+  }
+
+  function removePane(fullName,notify){
+    const p=screenPanes.get(fullName); if(!p)return;
+    if(notify&&socket)socket.emit('screen:leave',{sessionName:fullName});
+    try{p.term.dispose();}catch(_){}
+    p.paneEl.remove();
+    screenPanes.delete(fullName);
+    if(focusedScreen===fullName)focusedScreen=null;
+    updatePaneGrid();
+  }
+
+  // Closing a pane is a navigation: the URL stays the source of truth.
+  function closePaneNav(fullName){
+    haptic('light');
+    const remaining=route.sessions.filter(s=>s!==fullName);
+    location.hash=remaining.length?termHash(remaining):'#/screens';
+  }
+
+  function handleScreenExit(sessionName){
+    if(!screenPanes.has(sessionName))return; // we already closed it ourselves
+    removePane(sessionName,false);
+    showToast('session ended: '+prettyName(sessionName));
+    const remaining=route.sessions.filter(s=>s!==sessionName);
+    let target=null;
+    if(route.view==='term')target=remaining.length?termHash(remaining):'#/screens';
+    else if(route.add)target=remaining.length?'#/screens/add/'+remaining.map(encodeURIComponent).join(','):'#/screens';
+    if(target){ history.replaceState(null,'',target); applyRoute(); }
+    loadScreenSessions();
+  }
+
+  function focusPane(fullName){
+    if(!screenPanes.has(fullName))return;
+    focusedScreen=fullName;
+    screenPanes.forEach((p,k)=>p.paneEl.classList.toggle('focused',k===fullName));
+    updateTermBar();
+  }
+
+  function updateTermBar(){
+    const p=focusedScreen?screenPanes.get(focusedScreen):null;
+    const st=$('termStatus');
+    if(!p){
+      $('termName').textContent='';
+      st.textContent=''; st.className='stv-status';
+      $('termInput').placeholder='no session';
+      return;
+    }
+    $('termName').textContent=p.name+(screenPanes.size>1?' +'+(screenPanes.size-1):'');
+    const live=p.status==='attached';
+    st.textContent=(live?'live':'idle')+' · '+p.term.cols+'×'+p.term.rows;
+    st.className='stv-status '+(live?'live':'idle');
+    $('termInput').placeholder='send to '+p.name+'...';
+  }
+
+  function updatePaneGrid(){
+    const c=$('screenTermContainer');
+    c.classList.remove('panes-1','panes-2','panes-3','panes-4');
+    c.classList.add('panes-'+Math.max(1,Math.min(screenPanes.size,MAX_PANES)));
+  }
+
+  function screenTermFontSize(count){
+    const w=window.innerWidth;
+    let base = w<400?10 : w<600?11 : w<900?12 : 13;
+    if(count>1) base=Math.max(9,base-1);
+    if(count>2) base=Math.max(9,base-1);
+    return base;
+  }
+
+  function applyViewportHeight(){
+    const app=$('app');
+    const vv=window.visualViewport;
+    if(!vv)return;
+    // Soft keyboard overlays the page and pans the visual viewport instead
+    // of resizing the layout (iOS always; Android when resizes-content is
+    // unsupported). Pin the app to the visible region so it can't end up
+    // off-screen. Skip while pinch-zoomed — panning is intentional there.
+    const kbOpen=(vv.scale||1)<=1.01&&window.innerHeight-vv.height>80;
+    if(kbOpen){
+      app.style.height=vv.height+'px';
+      app.style.transform='translateY('+vv.offsetTop+'px)';
+    }else{
+      app.style.height='';
+      app.style.transform='';
+      if(window.scrollY)window.scrollTo(0,0);
+    }
+  }
+
+  function refitAllPanes(){
+    const fs=screenTermFontSize(screenPanes.size);
+    screenPanes.forEach((p,k)=>{
+      try{
+        if(p.term.options.fontSize!==fs)p.term.options.fontSize=fs;
+        p.fit.fit();
+        if(socket)socket.emit('screen:resize',{sessionName:k,cols:p.term.cols,rows:p.term.rows});
+      }catch(_){}
+    });
+    updateTermBar();
+  }
+
+  function handleScreenResize(){ applyViewportHeight(); if(screenPanes.size)refitAllPanes(); }
+  window.addEventListener('resize',handleScreenResize);
+  window.addEventListener('orientationchange',handleScreenResize);
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize',handleScreenResize);
+    window.visualViewport.addEventListener('scroll',applyViewportHeight);
+  }
+
+  // ── Terminal input bar + keys ───────────────────────
+  function termSend(withEnter){
+    const f=$('termInput');
+    if(!socket||!focusedScreen){showToast('no session');return;}
+    const v=f.value;
+    if(v===''){ if(withEnter)sendScreenSeq('\r'); return; } // empty send = bare Enter
+    sendScreenSeq(withEnter?v+'\r':v);
+    f.value='';
+    const p=screenPanes.get(focusedScreen);
+    if(p)try{p.term.scrollToBottom();}catch(_){}
+  }
+  $('termInputForm').addEventListener('submit',e=>{e.preventDefault();termSend(true);});
+  $('termTypeBtn').addEventListener('click',()=>termSend(false));
+
+  function sendScreenSeq(seq){
+    if(!socket||!focusedScreen)return;
+    haptic('light');
+    socket.emit('screen:input',{sessionName:focusedScreen,data:seq});
+  }
+
+  function screenFocusInput(){
+    const p=screenPanes.get(focusedScreen)||screenPanes.values().next().value;
+    if(!p)return;
+    haptic('light');
+    p.term.focus();
+  }
+
+  const SCREEN_KEY_MAP={
+    esc:'\x1b', tab:'\t', 's-tab':'\x1b[Z', cr:'\r',
+    'c-c':'\x03', 'c-d':'\x04', 'c-z':'\x1a',
+    up:'\x1b[A', down:'\x1b[B', right:'\x1b[C', left:'\x1b[D',
+  };
+  document.addEventListener('click',e=>{
+    const k=e.target.closest('.stv-key');
+    if(!k)return;
+    if(k.getAttribute('data-action')==='paste'){ screenPaste(); return; }
+    const seq=SCREEN_KEY_MAP[k.getAttribute('data-seq')];
+    if(seq) sendScreenSeq(seq);
+  });
+
+  async function screenPaste(){
+    if(!socket||!focusedScreen)return;
+    // Clipboard API needs a secure context (https or localhost). When it's
+    // unavailable (plain http over LAN), fall back to a manual paste prompt.
+    if(navigator.clipboard&&navigator.clipboard.readText){
+      try{
+        const text=await navigator.clipboard.readText();
+        if(text){ sendScreenSeq(text); showToast('pasted'); }
+        return;
+      }catch(err){ /* fall through to manual paste */ }
+    }
+    manualPaste();
+  }
+
+  function manualPaste(){
+    const ta=$('pasteFallback');
+    ta.value='';
+    ta.style.display='block';
+    ta.focus();
+    const done=()=>{
+      const text=ta.value;
+      ta.style.display='none';
+      ta.removeEventListener('blur',done);
+      ta.removeEventListener('keydown',onEsc);
+      if(text){ sendScreenSeq(text); showToast('pasted'); }
+    };
+    const onEsc=e=>{ if(e.key==='Escape'){ ta.value=''; done(); } };
+    ta.addEventListener('blur',done);
+    ta.addEventListener('keydown',onEsc);
+    showToast('paste here, then tap away');
+  }
+
+  // Swipe from the left edge to go back to the session list
+  document.addEventListener('touchstart',e=>{
+    if(route.view!=='term')return;
+    swipeStartX=e.touches[0].clientX; swipeStartY=e.touches[0].clientY;
+  },{passive:true});
+  document.addEventListener('touchend',e=>{
+    if(route.view!=='term')return;
+    const dx=e.changedTouches[0].clientX-swipeStartX, dy=Math.abs(e.changedTouches[0].clientY-swipeStartY);
+    if(swipeStartX<30&&dx>80&&dy<80)location.hash='#/screens';
+  },{passive:true});
+
+  // Pull to refresh on the session list
+  let ptrStartY=0,ptrActive=false;
+  function setupPullToRefresh(){
+    const list=$('screenSessionList');
+    list.addEventListener('touchstart',e=>{if(list.scrollTop===0){ptrStartY=e.touches[0].clientY;ptrActive=true;}},{passive:true});
+    list.addEventListener('touchend',e=>{if(!ptrActive)return;ptrActive=false;if(e.changedTouches[0].clientY-ptrStartY>60){haptic('light');loadScreenSessions();showToast('refreshing...');}},{passive:true});
+  }
+
+  // ── Chat messages ───────────────────────────────────
+  function hideWelcome(){const w=$('welcomeCard');if(w)w.style.display='none';}
 
   function addMsg(type,content){
     hideWelcome();
-    const wrap=document.getElementById('messages');
+    const wrap=$('messages');
     const time=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     const isLong=content.length>600;
     let el;
 
     if(type==='you'){
-      // Store input for pairing with output
       lastInputMsg=content;
       el=document.createElement('div');
       el.className='cmd-block';
@@ -1136,14 +1563,12 @@
       wrap.appendChild(el);
 
     } else if(type==='agent'||type==='cmd'||type==='command'){
-      // Try to attach to pending block
       const pending=document.getElementById('pending-block');
       if(pending){
         pending.removeAttribute('id');
         const outDiv=document.createElement('div');
         outDiv.className='cmd-output'+(isLong?' collapsed':'');
         outDiv.innerHTML=`${renderMd(content)}<button class="copy-btn" onclick="copyOutput(this)">copy</button>`;
-        // Animated status indicator
         const footer=document.createElement('div');
         footer.className='cmd-footer';
         footer.innerHTML=type==='error'
@@ -1177,7 +1602,6 @@
       }
 
     } else if(type==='error'){
-      // Remove pending block id so next output doesn't attach
       const pb=document.getElementById('pending-block');
       if(pb)pb.removeAttribute('id');
       el=document.createElement('div');
@@ -1192,7 +1616,6 @@
       wrap.appendChild(el);
 
     } else {
-      // system
       el=document.createElement('div');
       el.className='sys-line';
       el.textContent=content;
@@ -1206,7 +1629,6 @@
 
   function copyOutput(btn){
     const out=btn.closest('.cmd-output');
-    // Get text without the copy button text
     const clone=out.cloneNode(true);
     clone.querySelectorAll('.copy-btn').forEach(b=>b.remove());
     navigator.clipboard.writeText(clone.textContent.trim()).then(()=>{showToast('copied');haptic('light');});
@@ -1222,7 +1644,7 @@
     }
   }
 
-  // History
+  // ── History ─────────────────────────────────────────
   function saveMessage(type,content){
     if(type==='thinking')return;
     try{
@@ -1239,7 +1661,7 @@
       const recent=h.slice(-50);
       if(!recent.length)return;
       hideWelcome();
-      const wrap=document.getElementById('messages');
+      const wrap=$('messages');
       let pendingBlock=null;
       recent.forEach(m=>{
         const time=new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
@@ -1275,11 +1697,11 @@
 
   function clearHistory(){
     localStorage.removeItem('termi_history');
-    document.getElementById('messages').innerHTML='';
+    $('messages').innerHTML='';
     showWelcome(); showToast('history cleared'); haptic('light');
   }
   function showWelcome(){
-    document.getElementById('messages').innerHTML=`
+    $('messages').innerHTML=`
       <div class="welcome" id="welcomeCard">
         <div class="welcome-badge">
           <div class="welcome-top">$ termi ready</div>
@@ -1296,13 +1718,12 @@
       </div>`;
   }
 
-  // Send
+  // ── Send to agent ───────────────────────────────────
   function send(){
-    const el=document.getElementById('input');
+    const el=$('input');
     const msg=el.value.trim();
     if(!msg||!connected)return;
-    // Particle effect
-    const btn=document.getElementById('sendBtn');
+    const btn=$('sendBtn');
     const r=btn.getBoundingClientRect();
     spawnParticles(r.left+r.width/2,r.top+r.height/2);
     haptic('light'); addMsg('you',msg);
@@ -1310,386 +1731,27 @@
     setBusy(true);
     socket.emit('chat',{message:msg});
   }
-  function quick(cmd){haptic('light');document.getElementById('input').value=cmd;send();}
+  function quick(cmd){haptic('light');$('input').value=cmd;send();}
 
-  // Mode
-  function setMode(m){
-    mode=m; haptic('light');
-    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-    document.getElementById('tab-'+m).classList.add('active');
-    const msgs=document.getElementById('messages'),qr=document.getElementById('quickRow'),inp=document.getElementById('mainInputArea'),sv=document.getElementById('screenView');
-    if(m==='screens'){
-      msgs.style.display='none';qr.style.display='none';inp.style.display='none';
-      document.getElementById('screenBadge').classList.remove('on');
-      if(screenPanes.size>0&&!addingPane){sv.classList.remove('active');document.getElementById('screenTermView').classList.add('active');}
-      else{sv.classList.add('active');document.getElementById('screenTermView').classList.remove('active');loadScreenSessions();startScreenRefresh();}
-    } else {
-      msgs.style.display='flex';qr.style.display='flex';inp.style.display='flex';
-      sv.classList.remove('active');document.getElementById('screenTermView').classList.remove('active');stopScreenRefresh();
-    }
-  }
-
-  // Screens
-  function loadScreenSessions(){
-    if(!socket||!connected)return;
-    // Show skeleton loading
-    const el=document.getElementById('screenSessionList');
-    if(!el.querySelector('.scr-card')&&!el.querySelector('.scr-empty')){
-      el.innerHTML=Array(3).fill(`<div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>`).join('');
-    }
-    socket.emit('screen:list');
-  }
-  function refreshScreens(){haptic('light');loadScreenSessions();showToast('refreshing...');}
-  function startScreenRefresh(){stopScreenRefresh();screenRefreshInterval=setInterval(()=>{if(screenPanes.size===0||addingPane)loadScreenSessions();},10000);}
-  function stopScreenRefresh(){if(screenRefreshInterval){clearInterval(screenRefreshInterval);screenRefreshInterval=null;}}
-
-  let lastScreenSig=null;
-  function renderScreenSessions(sessions){
-    const el=document.getElementById('screenSessionList');
-    // While panes are open we only re-render the list if the user is picking an extra pane.
-    if(screenPanes.size>0&&!addingPane)return;
-    // Skip the innerHTML rebuild when nothing changed, so card nodes keep their
-    // identity between the 10s auto-refreshes. A volatile DOM is what makes
-    // automation / AI extensions click a stale node that's already been replaced.
-    const sig=(addingPane?'A|':'')+sessions.map(s=>s.fullName+':'+s.status+':'+s.pid+(screenPanes.has(s.fullName)?':o':'')).join(',');
-    if(sig===lastScreenSig && el.querySelector('.scr-card')) return;
-    lastScreenSig=sig;
-    // When adding a pane, a chip lets the user return to the open panes without picking.
-    const backChip=addingPane?`<button type="button" class="scr-card" aria-label="Back to panes" data-action="cancel-add" style="justify-content:center;gap:8px">
-        <span class="scr-chevron" style="transform:rotate(180deg)">&#8250;</span>
-        <div class="scr-name">back to panes</div>
-      </button>`:'';
-    if(!sessions.length){
-      el.innerHTML=backChip+`<div class="scr-empty">
-        <div class="scr-empty-icon">&gt;_</div>
-        <div class="scr-empty-text">No active sessions</div>
-        <div class="scr-empty-hint"><span class="g">$</span> screen -S &lt;name&gt;</div>
-      </div>`;
-      return;
-    }
-    el.innerHTML=backChip+sessions.map(s=>{
-      const live=s.status==='attached';
-      const open=screenPanes.has(s.fullName);
-      return `<button type="button" class="scr-card ${live?'live':'idle'}${open?' open':''}" aria-label="Open screen session ${escAttr(s.name)}" data-session="${escAttr(s.fullName)}" data-name="${escAttr(s.name)}" data-status="${escAttr(s.status)}">
-        <div class="scr-icon ${live?'live':'idle'}">&gt;_</div>
-        <div class="scr-info">
-          <div class="scr-name">${escHtml(s.name)}</div>
-          <div class="scr-meta">
-            <span class="scr-badge ${live?'live':'idle'}">${live?'live':'idle'}</span>
-            <span>pid ${s.pid}</span>
-            ${open?'<span class="scr-badge live">open</span>':''}
-          </div>
-        </div>
-        <div class="scr-chevron">&#8250;</div>
-      </button>`;
-    }).join('');
-  }
-
-  function screenJoin(fullName,name,status){
-    if(!socket)return;
-    // Already open → just focus it and return to the panes.
-    if(screenPanes.has(fullName)){ haptic('light'); focusPane(fullName); showTermView(); return; }
-    // On narrow screens we keep a single pane: replace whatever is open.
-    if(!canSplit()) closeAllPanes();
-    if(screenPanes.size>=MAX_PANES){ showToast('max '+MAX_PANES+' panes'); return; }
-    haptic('medium');
-    createPane(fullName,name,status);
-    showTermView();
-  }
-
-  function showTermView(){
-    addingPane=false;
-    setInputBar(localStorage.getItem('termi_input_bar')==='1');
-    document.getElementById('screenTermView').classList.add('active');
-    document.getElementById('screenView').classList.remove('active');
-    applyViewportHeight();
-    setTimeout(refitAllPanes,60);
-    setTimeout(refitAllPanes,220);
-  }
-
-  // Open the session list to pick an additional pane, keeping current panes alive.
-  function screenAddPane(){
-    if(screenPanes.size>=MAX_PANES){ showToast('max '+MAX_PANES+' panes'); return; }
-    haptic('light'); addingPane=true;
-    document.getElementById('screenTermView').classList.remove('active');
-    document.getElementById('screenView').classList.add('active');
-    loadScreenSessions();
-  }
-  function cancelAddPane(){ haptic('light'); showTermView(); }
-
-  function createPane(fullName,name,status){
-    const c=document.getElementById('screenTermContainer');
-    const pane=document.createElement('div');
-    pane.className='scr-pane'; pane.dataset.session=fullName;
-    const live=status==='attached';
-    pane.innerHTML=`<div class="scr-pane-bar">
-        <span class="scr-pane-name"></span>
-        <span class="scr-pane-st ${live?'live':'idle'}">${live?'live':'idle'}</span>
-        <button class="scr-pane-close" title="close pane">&times;</button>
-      </div>
-      <div class="scr-pane-term"></div>`;
-    pane.querySelector('.scr-pane-name').textContent=name;
-    c.appendChild(pane);
-    const termEl=pane.querySelector('.scr-pane-term');
-    const term=new Terminal({
-      cursorBlink:true, cursorStyle:'block', fontSize:screenTermFontSize(screenPanes.size+1),
-      fontFamily:'JetBrains Mono, SF Mono, monospace',
-      theme:{
-        background:'#0b0b0f',foreground:'#e8e8ef',cursor:'#22dd88',
-        selectionBackground:'#6ba1ff44',
-        black:'#0b0b0f',red:'#ff6b6b',green:'#22dd88',yellow:'#ffb347',
-        blue:'#6ba1ff',magenta:'#c084fc',cyan:'#22d3ee',white:'#e8e8ef',
-        brightBlack:'#555568',brightRed:'#ff8a80',brightGreen:'#69f0ae',
-        brightYellow:'#ffd740',brightBlue:'#82b1ff',brightMagenta:'#ea80fc',
-        brightCyan:'#84ffff',brightWhite:'#ffffff',
-      },
-      scrollback:5000, allowProposedApi:true,
-    });
-    const fit=new FitAddon.FitAddon();
-    term.loadAddon(fit); term.open(termEl);
-    term.onData(d=>{if(socket)socket.emit('screen:input',{sessionName:fullName,data:d});});
-    screenPanes.set(fullName,{term,fit,paneEl:pane,name,status});
-    pane.addEventListener('mousedown',()=>focusPane(fullName));
-    pane.addEventListener('touchstart',()=>focusPane(fullName),{passive:true});
-    pane.querySelector('.scr-pane-close').addEventListener('click',e=>{e.stopPropagation();closePane(fullName);});
-    updatePaneGrid();
-    ensureScreenResizeListeners();
-    socket.emit('screen:join',{sessionName:fullName,cols:term.cols||80,rows:term.rows||24});
-    focusPane(fullName);
-    const sync=()=>{try{fit.fit();socket.emit('screen:resize',{sessionName:fullName,cols:term.cols,rows:term.rows});}catch(_){}};
-    setTimeout(sync,120); setTimeout(sync,320);
-  }
-
-  function focusPane(fullName){
-    if(!screenPanes.has(fullName))return;
-    focusedScreen=fullName;
-    screenPanes.forEach((p,k)=>p.paneEl.classList.toggle('focused',k===fullName));
-    const p=screenPanes.get(fullName);
-    document.getElementById('screenTermName').textContent=p.name;
-    const st=document.getElementById('screenTermStatus');
-    const live=p.status==='attached';
-    st.textContent=live?'LIVE':'IDLE'; st.className='stv-status '+(live?'live':'idle');
-  }
-
-  function closePane(fullName){
-    const p=screenPanes.get(fullName); if(!p)return;
-    haptic('light');
-    if(socket)socket.emit('screen:leave',{sessionName:fullName});
-    try{p.term.dispose();}catch(_){}
-    p.paneEl.remove();
-    screenPanes.delete(fullName);
-    if(focusedScreen===fullName)focusedScreen=null;
-    if(screenPanes.size===0){ goToScreenList(); return; }
-    if(!focusedScreen)focusPane(screenPanes.keys().next().value);
-    updatePaneGrid();
-    setTimeout(refitAllPanes,60);
-  }
-
-  function closeAllPanes(){
-    screenPanes.forEach((p,k)=>{
-      if(socket)socket.emit('screen:leave',{sessionName:k});
-      try{p.term.dispose();}catch(_){}
-      p.paneEl.remove();
-    });
-    screenPanes.clear(); focusedScreen=null;
-    updatePaneGrid();
-  }
-
-  function screenGoBack(){
-    if(screenPanes.size===0&&!addingPane)return;
-    haptic('light');
-    closeAllPanes();
-    removeScreenResizeListeners();
-    goToScreenList();
-  }
-
-  function goToScreenList(){
-    addingPane=false;
-    const v=document.getElementById('screenTermView');
-    v.classList.remove('active'); v.style.height='';
-    if(mode==='screens'){document.getElementById('screenView').classList.add('active');loadScreenSessions();}
-  }
-
-  function updatePaneGrid(){
-    const c=document.getElementById('screenTermContainer');
-    c.classList.remove('panes-1','panes-2','panes-3','panes-4');
-    if(screenPanes.size)c.classList.add('panes-'+Math.min(screenPanes.size,MAX_PANES));
-  }
-
-  function screenTermFontSize(count){
-    const w=window.innerWidth;
-    let base = w<400?10 : w<600?11 : w<900?12 : 13;
-    if(count>1) base=Math.max(9,base-1); // shrink a touch per split so more fits
-    if(count>2) base=Math.max(9,base-1);
-    return base;
-  }
-
-  function applyViewportHeight(){
-    const v=document.getElementById('screenTermView');
-    if(!v||!v.classList.contains('active'))return;
-    const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
-    v.style.height=h+'px';
-  }
-
-  function refitAllPanes(){
-    const fs=screenTermFontSize(screenPanes.size);
-    screenPanes.forEach((p,k)=>{
-      try{
-        if(p.term.options.fontSize!==fs)p.term.options.fontSize=fs;
-        p.fit.fit();
-        if(socket)socket.emit('screen:resize',{sessionName:k,cols:p.term.cols,rows:p.term.rows});
-      }catch(_){}
-    });
-  }
-
-  function ensureScreenResizeListeners(){
-    if(screenResizeBound)return; screenResizeBound=true;
-    window.addEventListener('resize',handleScreenResize);
-    window.addEventListener('orientationchange',handleScreenResize);
-    if(window.visualViewport){
-      window.visualViewport.addEventListener('resize',handleScreenResize);
-      window.visualViewport.addEventListener('scroll',applyViewportHeight);
-    }
-  }
-  function removeScreenResizeListeners(){
-    if(!screenResizeBound)return; screenResizeBound=false;
-    window.removeEventListener('resize',handleScreenResize);
-    window.removeEventListener('orientationchange',handleScreenResize);
-    if(window.visualViewport){
-      window.visualViewport.removeEventListener('resize',handleScreenResize);
-      window.visualViewport.removeEventListener('scroll',applyViewportHeight);
-    }
-  }
-
-  function handleScreenResize(){ applyViewportHeight(); refitAllPanes(); }
-
-  function screenFocusInput(){
-    const p=screenPanes.get(focusedScreen)||screenPanes.values().next().value;
-    if(!p)return;
-    haptic('light');
-    p.term.focus();
-    const ta=p.paneEl.querySelector('textarea');
-    if(ta){ta.focus();ta.click();}
-  }
-
-  function sendScreenSeq(seq){
-    if(!socket||!focusedScreen)return;
-    haptic('light');
-    socket.emit('screen:input',{sessionName:focusedScreen,data:seq});
-  }
-
-  // Optional text-input bar — off by default, toggled from the header.
-  function setInputBar(on){
-    document.getElementById('screenInputBar').classList.toggle('on',on);
-    document.getElementById('inputToggleBtn').classList.toggle('on',on);
-  }
-  function toggleInputBar(){
-    const on=!document.getElementById('screenInputBar').classList.contains('on');
-    haptic('light');
-    setInputBar(on);
-    localStorage.setItem('termi_input_bar',on?'1':'0');
-    if(on){const f=document.getElementById('screenInputField');if(f)f.focus();}
-  }
-  function sendInputBar(e){
-    e.preventDefault();
-    const f=document.getElementById('screenInputField');
-    if(f.value==='')return;
-    if(!socket||!focusedScreen){showToast('no session');return;}
-    sendScreenSeq(f.value+'\r');
-    f.value='';
-    f.focus();
-  }
-
-  const SCREEN_KEY_MAP={
-    esc:'\x1b', tab:'\t', 's-tab':'\x1b[Z', cr:'\r',
-    'c-c':'\x03', 'c-d':'\x04', 'c-z':'\x1a',
-    up:'\x1b[A', down:'\x1b[B', right:'\x1b[C', left:'\x1b[D',
-  };
-  async function screenPaste(){
-    if(!socket||!focusedScreen)return;
-    // Clipboard API needs a secure context (https or localhost). When it's
-    // unavailable (plain http over LAN), fall back to a manual paste prompt.
-    if(navigator.clipboard&&navigator.clipboard.readText){
-      try{
-        const text=await navigator.clipboard.readText();
-        if(text){ sendScreenSeq(text); showToast('pasted'); }
-        return;
-      }catch(err){ /* fall through to manual paste */ }
-    }
-    manualPaste();
-  }
-
-  function manualPaste(){
-    const ta=document.getElementById('pasteFallback');
-    ta.value='';
-    ta.style.display='block';
-    ta.focus();
-    const done=()=>{
-      const text=ta.value;
-      ta.style.display='none';
-      ta.removeEventListener('blur',done);
-      ta.removeEventListener('keydown',onEsc);
-      if(text){ sendScreenSeq(text); showToast('pasted'); }
-    };
-    const onEsc=e=>{ if(e.key==='Escape'){ ta.value=''; done(); } };
-    // Give the OS paste gesture a moment, then send on blur or after input settles.
-    ta.addEventListener('blur',done);
-    ta.addEventListener('keydown',onEsc);
-    showToast('paste here, then tap away');
-  }
-
-  document.addEventListener('click',e=>{
-    const k=e.target.closest('.stv-key');
-    if(!k)return;
-    if(k.getAttribute('data-action')==='paste'){ screenPaste(); return; }
-    const seq=SCREEN_KEY_MAP[k.getAttribute('data-seq')];
-    if(seq) sendScreenSeq(seq);
-  });
-
-  // Delegated activation for the screen list cards (real <button>s). One handler
-  // covers mouse clicks, native Enter/Space (buttons fire click), el.click(), and
-  // synthetic MouseEvents dispatched by AI browser extensions / assistive tech.
-  document.getElementById('screenSessionList').addEventListener('click',e=>{
-    const card=e.target.closest('.scr-card');
-    if(!card)return;
-    if(card.dataset.action==='cancel-add'){ cancelAddPane(); return; }
-    const fullName=card.dataset.session;
-    if(fullName) screenJoin(fullName, card.dataset.name||'', card.dataset.status||'');
-  });
-
-  // Swipe back
-  document.addEventListener('touchstart',e=>{if(screenPanes.size===0)return;swipeStartX=e.touches[0].clientX;swipeStartY=e.touches[0].clientY;},{passive:true});
-  document.addEventListener('touchend',e=>{if(screenPanes.size===0)return;const dx=e.changedTouches[0].clientX-swipeStartX,dy=Math.abs(e.changedTouches[0].clientY-swipeStartY);if(swipeStartX<30&&dx>80&&dy<80)screenGoBack();},{passive:true});
-
-  // Pull to refresh
-  let ptrStartY=0,ptrActive=false;
-  function setupPullToRefresh(){
-    const list=document.getElementById('screenSessionList');
-    list.addEventListener('touchstart',e=>{if(list.scrollTop===0){ptrStartY=e.touches[0].clientY;ptrActive=true;}},{passive:true});
-    list.addEventListener('touchend',e=>{if(!ptrActive)return;ptrActive=false;if(e.changedTouches[0].clientY-ptrStartY>60){haptic('light');loadScreenSessions();showToast('refreshing...');}},{passive:true});
-  }
-
-  // Agent
+  // ── Agent switch ────────────────────────────────────
   function switchAgent(type){if(!socket||!connected||type===activeAgent)return;haptic('medium');socket.emit('setAgent',{type});}
-  function setAgentUI(type){activeAgent=type;document.querySelectorAll('.agent-btn').forEach(b=>b.classList.remove('active'));document.getElementById('opt-'+type).classList.add('active');}
+  function setAgentUI(type){activeAgent=type;document.querySelectorAll('.agent-btn').forEach(b=>b.classList.remove('active'));$('opt-'+type).classList.add('active');}
 
-  // Utils
+  // ── Utils ───────────────────────────────────────────
   function setStatus(state,text){
-    const d=document.getElementById('statusDot');
+    const d=$('statusDot');
     d.className='h-dot'+(state==='on'?' on':state==='err'?' err':'');
-    // Shorten "Ready — /long/path" to just the last folder
     let display=text;
     const m=text.match(/Ready\s*[—–-]\s*(.+)/);
     if(m){ const parts=m[1].replace(/\/$/,'').split('/'); display=parts[parts.length-1]||m[1]; }
     else if(text.includes('Reconnected'))display='connected';
     else if(text.includes('catching up'))display='syncing...';
-    document.getElementById('statusText').textContent=display;
-    document.getElementById('statusText').title=text; // full text on hover/long-press
+    $('statusText').textContent=display;
+    $('statusText').title=text;
   }
   function onKey(e){const mob=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);if(!mob&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}
   function resizeTA(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px';}
   function escHtml(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');}
-  function escAttr(t){return String(t).replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 
   // Allow-list of safe URL schemes for markdown links.
   // Blocks javascript:, data:, vbscript:, file:, etc.
@@ -1702,24 +1764,16 @@
   // (e.g. <img onerror=...>) cannot execute. Markdown patterns are then
   // applied on the escaped text. Link hrefs go through isSafeUrl.
   function renderMd(t){
-    // 1) Escape everything. escHtml also turns \n into <br>; convert it
-    //    back to a real newline so the regexes below still match
-    //    multi-line code blocks, then re-apply <br> at the end.
     let s = escHtml(String(t)).replace(/<br>/g, '\n');
-    // 2) Code blocks (body is already escaped from step 1)
     s = s.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
       return `<pre><code>${code.trimEnd()}</code></pre>`;
     });
-    // 3) Inline code
     s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // 4) Bold
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    // 5) Links — label already escaped; href scheme-validated
     s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
       const href = isSafeUrl(url) ? url : '#';
       return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
     });
-    // 6) Line breaks
     s = s.replace(/\n/g, '<br>');
     return s;
   }
@@ -1727,24 +1781,24 @@
   // Agent busy state
   function setBusy(b){
     agentBusy=b;
-    document.getElementById('busySpinner').classList.toggle('on',b);
-    document.getElementById('sendBtn').classList.toggle('busy',b);
+    $('busySpinner').classList.toggle('on',b);
+    $('sendBtn').classList.toggle('busy',b);
   }
 
   // Scroll FAB + auto-scroll lock
   function setupScrollLock(){
-    const wrap=document.getElementById('messages');
+    const wrap=$('messages');
     wrap.addEventListener('scroll',()=>{
       const gap=wrap.scrollHeight-wrap.scrollTop-wrap.clientHeight;
       autoScroll=gap<60;
-      document.getElementById('scrollFab').classList.toggle('visible',gap>200&&mode==='chat');
+      $('scrollFab').classList.toggle('visible',gap>200&&route.view==='chat');
     });
   }
   function scrollToBottom(){
-    const w=document.getElementById('messages');
+    const w=$('messages');
     w.scrollTo({top:w.scrollHeight,behavior:'smooth'});
     autoScroll=true;
-    document.getElementById('scrollFab').classList.remove('visible');
+    $('scrollFab').classList.remove('visible');
   }
 
   // Particle effect on send
@@ -1765,10 +1819,10 @@
 
   // Search / filter
   function toggleSearch(){
-    const bar=document.getElementById('searchBar');
+    const bar=$('searchBar');
     bar.classList.toggle('open');
-    if(bar.classList.contains('open'))document.getElementById('searchInput').focus();
-    else{document.getElementById('searchInput').value='';filterMessages('');}
+    if(bar.classList.contains('open'))$('searchInput').focus();
+    else{$('searchInput').value='';filterMessages('');}
   }
   function filterMessages(q){
     const blocks=document.querySelectorAll('#messages > *');
@@ -1792,11 +1846,9 @@
     const r=document.documentElement.style;
     r.setProperty('--green',t.accent); r.setProperty('--green-dim',t.dim);
     r.setProperty('--green-mid',t.mid); r.setProperty('--green-glow',t.glow);
-    // Update gradient buttons
     document.querySelectorAll('.h-logo,.splash-icon,.auth-icon,.auth-btn,.prompt-send:not(.busy)').forEach(el=>{
       el.style.background=`linear-gradient(135deg,${t.accent},${t.accentDark})`;
     });
-    // Update theme dots
     document.querySelectorAll('.theme-dot').forEach(d=>d.classList.remove('active'));
     const dots=document.querySelectorAll('.theme-dot');
     const idx={green:0,blue:1,amber:2,purple:3}[name];
@@ -1819,24 +1871,24 @@
 
   // Long-press to copy on mobile
   function setupLongPress(){
-    let timer=null,target=null;
-    document.getElementById('messages').addEventListener('touchstart',e=>{
+    let timer=null;
+    $('messages').addEventListener('touchstart',e=>{
       const out=e.target.closest('.cmd-output');
       if(!out)return;
-      target=out; timer=setTimeout(()=>{
+      timer=setTimeout(()=>{
         const clone=out.cloneNode(true);
         clone.querySelectorAll('.copy-btn').forEach(b=>b.remove());
         navigator.clipboard.writeText(clone.textContent.trim()).then(()=>{showToast('copied');haptic('medium');});
       },600);
     },{passive:true});
-    document.getElementById('messages').addEventListener('touchend',()=>{clearTimeout(timer);},{passive:true});
-    document.getElementById('messages').addEventListener('touchmove',()=>{clearTimeout(timer);},{passive:true});
+    $('messages').addEventListener('touchend',()=>{clearTimeout(timer);},{passive:true});
+    $('messages').addEventListener('touchmove',()=>{clearTimeout(timer);},{passive:true});
   }
 
   // Double-tap to retry last command
   let lastTap=0;
   function setupDoubleTapRetry(){
-    document.getElementById('messages').addEventListener('touchend',e=>{
+    $('messages').addEventListener('touchend',e=>{
       const now=Date.now();
       if(now-lastTap<300&&lastInputMsg&&connected&&!agentBusy){
         haptic('medium');
@@ -1848,31 +1900,31 @@
     },{passive:true});
   }
 
-  // Keyboard awareness
+  // Keyboard awareness for chat
   if(window.visualViewport){
     window.visualViewport.addEventListener('resize',()=>{
       if(window.innerHeight-window.visualViewport.height>100){
-        setTimeout(()=>{document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
-          if(screenPanes.size>0)refitAllPanes();},100);
+        setTimeout(()=>{$('messages').scrollTop=$('messages').scrollHeight;},100);
       }
     });
   }
 
-  // Init
+  // ── Init ────────────────────────────────────────────
   window.addEventListener('load',()=>{
+    if(!location.hash||location.hash==='#')history.replaceState(null,'','#/screens');
+    applyRoute();
+    window.addEventListener('hashchange',applyRoute);
     const saved=localStorage.getItem('termi_token');
     if(saved){token=saved;initSocket();}
-    else{hideSplash();document.getElementById('auth').style.display='flex';}
+    else{hideSplash();$('auth').style.display='flex';}
     loadHistory();
-    document.getElementById('tokenInput').addEventListener('keydown',e=>{if(e.key==='Enter')authenticate();});
-    document.getElementById('input').addEventListener('input',()=>{document.getElementById('sendBtn').disabled=!connected;});
+    $('input').addEventListener('input',()=>{$('sendBtn').disabled=!connected;});
     setupPullToRefresh();
     setupScrollLock();
     setupLongPress();
     setupDoubleTapRetry();
-    // Restore theme
     if(currentTheme!=='green')setTheme(currentTheme);
-    setTimeout(()=>{if(!connected&&document.getElementById('splash').style.display!=='none'){hideSplash();if(!token)document.getElementById('auth').style.display='flex';}},5000);
+    setTimeout(()=>{if(!connected&&$('splash').style.display!=='none'){hideSplash();if(!token)$('auth').style.display='flex';}},5000);
   });
 
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});

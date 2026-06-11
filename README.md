@@ -10,12 +10,13 @@ A lightweight web UI that lets you chat with your **Cursor Agent CLI** from any 
 
 ## What it does
 
-- Chat with Cursor Agent CLI from any browser
+- View and control `screen` sessions from any browser (default **screens** tab)
+- Chat with Cursor Agent CLI / Claude Code from the **chat** tab
 - Full conversation context maintained via `--continue` flag
-- Run shell commands directly from the UI
 - Stream agent responses live as they type
 - Reset conversation with one click
 - Mobile responsive — works great on phone
+- Automation-friendly: every view has its own URL (`#/screens`, `#/screen/<name>`, `#/chat`), all controls are real labelled links/buttons/inputs, so browser agents (e.g. iChat) and assistive tech can drive it reliably
 
 ---
 
@@ -130,17 +131,22 @@ No need to keep any process alive in the background.
 
 ## Usage
 
-### Agent Chat mode
-Type your message and press Enter or tap Send. The agent responds with full context from previous messages.
+### Screens (default tab)
+The app opens on the **screens** tab listing all `screen` sessions on the server. Tap a session card to open a live terminal attached to it (`screen -x`, so the session keeps running). In the terminal view:
 
-### Command mode
-Switch to the **Command** tab to run raw shell commands directly on your server.
+- The **input bar** at the bottom is always visible — type a line and hit **send** (sends text + Enter) or **type** (sends text without Enter).
+- The **key bar** sends special keys: esc, tab, ^C, ^D, ^Z, arrows, Enter, paste.
+- **+ split** (desktop) opens additional sessions side by side, up to 4 panes.
+- **← sessions** goes back to the list. Each view has its own URL, so the browser back button works too.
+
+### Agent chat
+Switch to the **chat** tab, type your message and press Enter or tap Send. The agent responds with full context from previous messages. Use the cursor/claude toggle to pick the CLI.
 
 ### Quick commands
 Tap the quick buttons (server status, processes, disk, deploy) for one-tap common tasks.
 
 ### Reset conversation
-Click **RESET** in the header to start a fresh conversation.
+Open the **⋯** menu and tap **Reset session** to start a fresh conversation.
 
 ---
 

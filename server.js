@@ -265,11 +265,15 @@ async function listScreenSessions() {
 function parseScreenLs(output) {
   const sessions = [];
   for (const line of output.split('\n')) {
-    const match = line.match(/^\t(\d+)\.(\S+)\t\(([^)]+)\)/);
+    const match = line.match(/^\t(\d+)\.(\S+)\t(.+)$/);
     if (!match) continue;
     const pid = match[1];
     const name = match[2];
-    const statusRaw = match[3].toLowerCase();
+    // Trailing fields are parenthesized and the status is always the last one —
+    // some systems prepend a timestamp: "(06/11/2026 02:42:42 PM)\t(Attached)"
+    const fields = [...match[3].matchAll(/\(([^)]*)\)/g)];
+    if (!fields.length) continue;
+    const statusRaw = fields[fields.length - 1][1].toLowerCase();
     const attached = statusRaw.includes('attached');
     sessions.push({ pid, name, fullName: `${pid}.${name}`, status: attached ? 'attached' : 'detached' });
   }

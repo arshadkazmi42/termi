@@ -46,6 +46,21 @@ describe('parseScreenLs', () => {
     assert.equal(sessions[0].pid, '11111');
   });
 
+  it('parses status when a timestamp column is present', () => {
+    const output = [
+      'There are screens on:',
+      '\t204659.termi\t(06/11/2026 02:42:42 PM)\t(Attached)',
+      '\t134556.only-terminal\t(06/09/2026 08:25:45 PM)\t(Detached)',
+      '2 Sockets in /run/screen/S-root.',
+    ].join('\n');
+
+    const sessions = parseScreenLs(output);
+    assert.equal(sessions.length, 2);
+    assert.equal(sessions[0].status, 'attached');
+    assert.equal(sessions[0].fullName, '204659.termi');
+    assert.equal(sessions[1].status, 'detached');
+  });
+
   it('handles multi-attached status text', () => {
     const output = '\t99999.test_run\t(Multi, Attached)\n';
     const sessions = parseScreenLs(output);
