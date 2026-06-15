@@ -1294,6 +1294,19 @@
       ||{fullName,name:prettyName(fullName),status:'detached'};
   }
 
+  // Strip xterm mouse-tracking reports so taps/scroll-drags never reach the
+  // running program. Full-screen TUIs (Claude Code, vim, htop) enable mouse
+  // tracking and keep re-asserting it, so `reset` can't fix it from inside —
+  // on touch devices every tap/drag became a mouse report dumped into the
+  // app's input. We don't use terminal mouse on mobile (the key bar + input
+  // bar drive everything), so dropping these reports is purely upside.
+  function stripMouseReports(d){
+    return d
+      .replace(/\x1b\[<\d+;\d+;\d+[Mm]/g,'')   // SGR mode (1006)
+      .replace(/\x1b\[M[\s\S]{3}/g,'')          // X10/normal mode (1000/1002/1003)
+      .replace(/\x1b\[\d+;\d+;\d+M/g,'');       // urxvt mode (1015)
+  }
+
   // xterm.js has no built-in touch scrolling — its canvas overlays the
   // scrollable viewport — so translate vertical drags into scrollLines.
   // Attached screen sessions render in the alternate buffer, which has no
@@ -1369,7 +1382,7 @@
     const helper=pane.querySelector('.xterm-helper-textarea');
     if(helper)helper.setAttribute('aria-hidden','true');
     enableTouchScroll(term,pane.querySelector('.scr-pane-term'),fullName);
-    term.onData(d=>{if(socket)socket.emit('screen:input',{sessionName:fullName,data:d});});
+    term.onData(d=>{const clean=stripMouseReports(d);if(socket&&clean)socket.emit('screen:input',{sessionName:fullName,data:clean});});
     screenPanes.set(fullName,{term,fit,paneEl:pane,name:meta.name,status:meta.status});
     pane.addEventListener('mousedown',()=>focusPane(fullName));
     pane.addEventListener('touchstart',()=>focusPane(fullName),{passive:true});
