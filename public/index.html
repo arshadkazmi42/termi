@@ -920,8 +920,6 @@
       <button type="button" class="stv-key" data-seq="pgdn" aria-label="Send Page Down">pgdn</button>
       <button type="button" class="stv-key" data-seq="esc" aria-label="Send Escape key">esc</button>
       <button type="button" class="stv-key" data-seq="c-c" aria-label="Send Ctrl+C interrupt">^C</button>
-      <button type="button" class="stv-key" data-seq="c-d" aria-label="Send Ctrl+D">^D</button>
-      <button type="button" class="stv-key" data-seq="c-z" aria-label="Send Ctrl+Z">^Z</button>
       <button type="button" class="stv-key kbd" data-action="paste" aria-label="Paste clipboard into terminal">paste</button>
     </div>
   </section>
@@ -1518,7 +1516,7 @@
 
   const SCREEN_KEY_MAP={
     esc:'\x1b', tab:'\t', 's-tab':'\x1b[Z', cr:'\r',
-    'c-c':'\x03', 'c-d':'\x04', 'c-z':'\x1a',
+    'c-c':'\x03',
     up:'\x1b[A', down:'\x1b[B', right:'\x1b[C', left:'\x1b[D',
     copy:'\x01[', pgup:'\x1b[5~', pgdn:'\x1b[6~',
   };
