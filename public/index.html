@@ -708,6 +708,28 @@
     .h-status { max-width: 120px; }
   }
 
+  /* ── Full-screen terminal (hide all chrome) ─────── */
+  #app.term-fs .header,
+  #app.term-fs .stv-header,
+  #app.term-fs .stv-inputbar,
+  #app.term-fs .stv-keybar { display: none; }
+  #app.term-fs #screenTermContainer {
+    padding-top: calc(2px + var(--safe-t));
+    padding-bottom: calc(2px + var(--safe-b));
+  }
+  .term-fs-exit {
+    position: fixed; top: calc(8px + var(--safe-t)); right: 12px; z-index: 120;
+    display: none; align-items: center; gap: 5px;
+    padding: 7px 13px; border-radius: 999px;
+    background: rgba(19,19,26,0.72); border: 1px solid var(--border-hi);
+    color: var(--green); font-family: var(--mono); font-size: 12px; font-weight: 600;
+    cursor: pointer; opacity: 0.65; transition: opacity 0.15s;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  #app.term-fs .term-fs-exit { display: inline-flex; }
+  .term-fs-exit:active { opacity: 1; background: var(--green); color: #000; }
+
   /* ── Scroll-to-bottom FAB ────────────────────────── */
   .scroll-fab {
     position: fixed; bottom: 90px; right: 20px; z-index: 40;
@@ -899,8 +921,10 @@
       <span class="stv-status" id="termStatus" role="status"></span>
       <a class="stv-back" id="addPaneBtn" href="#/screens" hidden aria-label="Open another session in a split pane" style="padding:5px 9px">+ split</a>
       <button type="button" class="stv-back" onclick="screenFocusInput()" aria-label="Focus the terminal for direct keyboard typing" style="padding:5px 9px">kbd</button>
+      <button type="button" class="stv-back" onclick="toggleTermFullscreen()" aria-label="Full screen — hide all chrome for a bigger terminal" style="padding:5px 9px">full</button>
     </div>
     <div id="screenTermContainer" class="panes-1"></div>
+    <button type="button" class="term-fs-exit" onclick="toggleTermFullscreen(false)" aria-label="Exit full screen">&#10005; exit full</button>
     <form class="stv-inputbar" id="termInputForm">
       <input type="text" id="termInput" class="stv-input-field" placeholder="type a command..."
         aria-label="Terminal input" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" />
@@ -1164,6 +1188,7 @@
       document.title='termi — '+prettyName(r.sessions[0]);
     }
     updateAddPaneBtn();
+    if(r.view!=='term')$('app').classList.remove('term-fs'); // full screen is terminal-only
     applyViewportHeight();
     if(r.view==='term'){ setTimeout(refitAllPanes,60); setTimeout(refitAllPanes,220); }
   }
@@ -1478,6 +1503,21 @@
       app.style.transform='';
       if(window.scrollY)window.scrollTo(0,0);
     }
+  }
+
+  // Full-screen the terminal: hide the app/terminal chrome so the session
+  // fills the viewport. A floating "exit full" button (shown via CSS while
+  // #app has .term-fs) brings the chrome back.
+  function toggleTermFullscreen(force){
+    const app=$('app');
+    const on=(force===undefined)?!app.classList.contains('term-fs'):!!force;
+    app.classList.toggle('term-fs',on);
+    haptic('light');
+    if(on)showToast('full screen · tap "exit full" to return');
+    // Terminal area just changed size — refit and tell the pty its new rows/cols.
+    applyViewportHeight();
+    setTimeout(refitAllPanes,60);
+    setTimeout(refitAllPanes,260);
   }
 
   function refitAllPanes(){
