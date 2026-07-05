@@ -889,6 +889,13 @@
   }
   .sf-field input:focus, .sf-field select:focus, .sf-keytext:focus, .sf-keypass:focus { border-color: var(--green); }
   .sf-keytext { min-height: 110px; resize: vertical; font-size: 12px; }
+  .sf-seg { display: flex; gap: 6px; margin-top: 2px; }
+  .sf-seg-btn {
+    flex: 1; padding: 9px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text2); cursor: pointer;
+    font-family: var(--sans); font-size: 0.85rem; font-weight: 600; text-transform: none; letter-spacing: 0;
+  }
+  .sf-seg-btn.active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
   .sf-err { color: var(--red); font-family: var(--mono); font-size: 0.75rem; min-height: 15px; }
   .sf-row { display: flex; gap: 10px; }
   .sf-btn {
@@ -1085,11 +1092,22 @@
           <label class="sf-field">user<input id="sfUser" value="root" autocomplete="off"></label>
           <label class="sf-field">port<input id="sfPort" type="number" value="22" min="1" max="65535"></label>
         </div>
-        <label class="sf-field">ssh key
-          <select id="sfKey" onchange="onKeySelect()"></select>
+        <div class="sf-field">authentication
+          <div class="sf-seg" role="tablist">
+            <button type="button" class="sf-seg-btn active" id="sfAuthKey" onclick="setAuthType('key')" role="tab">SSH key</button>
+            <button type="button" class="sf-seg-btn" id="sfAuthPass" onclick="setAuthType('password')" role="tab">Password</button>
+          </div>
+        </div>
+        <div id="sfKeyWrap">
+          <label class="sf-field">ssh key
+            <select id="sfKey" onchange="onKeySelect()"></select>
+          </label>
+          <textarea id="sfKeyText" class="sf-keytext" placeholder="paste private key (OpenSSH / PEM) — stored encrypted, never shown again" hidden autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+          <input id="sfKeyPass" class="sf-keypass" type="password" placeholder="key passphrase — leave empty if the key has none" hidden autocomplete="off">
+        </div>
+        <label class="sf-field" id="sfPassWrap" hidden>password
+          <input id="sfPassword" type="password" placeholder="ssh password — stored encrypted" autocomplete="off">
         </label>
-        <textarea id="sfKeyText" class="sf-keytext" placeholder="paste private key (OpenSSH / PEM) — stored encrypted, never shown again" hidden autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
-        <input id="sfKeyPass" class="sf-keypass" type="password" placeholder="key passphrase — leave empty if the key has none" hidden autocomplete="off">
         <div class="sf-err" id="sfError" role="alert"></div>
         <div class="sf-row">
           <button type="button" class="sf-btn" onclick="closeServerForm()">cancel</button>
@@ -1758,7 +1776,7 @@
     row.querySelector('.srv-name-text').textContent=s.name;
     row.querySelector('.srv-sub').textContent=id==='local'
       ?'this box — no SSH needed'
-      :`${s.user}@${s.host}${s.port&&s.port!==22?':'+s.port:''}`;
+      :`${s.user}@${s.host}${s.port&&s.port!==22?':'+s.port:''} · ${s.authType==='password'?'password':'key'}`;
     row.dataset.search=(id==='local'?'local this server ':'')+
       (s.name+' '+(s.user||'')+' '+(s.host||'')).toLowerCase();
     const scr=row.querySelector('.srv-scr');
@@ -1942,6 +1960,15 @@
     $('sfKeyPass').hidden=!pasting;
   }
 
+  let sfAuth='key';
+  function setAuthType(t){
+    sfAuth=t;
+    $('sfAuthKey').classList.toggle('active',t==='key');
+    $('sfAuthPass').classList.toggle('active',t==='password');
+    $('sfKeyWrap').hidden=t!=='key';
+    $('sfPassWrap').hidden=t!=='password';
+  }
+
   function openServerForm(id){
     editingServer=id||null;
     const f=$('serverForm');
@@ -1954,6 +1981,10 @@
     $('sfError').textContent='';
     $('sfKeyText').value='';
     $('sfKeyPass').value='';
+    $('sfPassword').value='';
+    setAuthType(s&&s.authType==='password'?'password':'key');
+    if(s&&s.authType==='password')$('sfPassword').placeholder='leave empty to keep current password';
+    else $('sfPassword').placeholder='ssh password — stored encrypted';
     refreshKeySelect();
     if(s&&s.keyId&&[...$('sfKey').options].some(o=>o.value===s.keyId))$('sfKey').value=s.keyId;
     onKeySelect();
@@ -1978,16 +2009,23 @@
       host:$('sfHost').value.trim(),
       user:$('sfUser').value.trim()||'root',
       port:parseInt($('sfPort').value,10)||22,
+      authType:sfAuth,
     };
-    const keySel=$('sfKey').value;
-    if(keySel==='__new__'){
-      const material=$('sfKeyText').value.trim();
-      if(!material){err.textContent='Paste a private key or pick a stored one.';return;}
-      payload.newKey={name:(payload.name||'key')+' key',privateKey:material};
-      const pass=$('sfKeyPass').value;
-      if(pass)payload.newKey.passphrase=pass;
+    if(sfAuth==='password'){
+      const pw=$('sfPassword').value;
+      if(!pw&&!editingServer){err.textContent='Enter a password.';return;}
+      if(pw)payload.password=pw;
     } else {
-      payload.keyId=keySel;
+      const keySel=$('sfKey').value;
+      if(keySel==='__new__'){
+        const material=$('sfKeyText').value.trim();
+        if(!material){err.textContent='Paste a private key or pick a stored one.';return;}
+        payload.newKey={name:(payload.name||'key')+' key',privateKey:material};
+        const pass=$('sfKeyPass').value;
+        if(pass)payload.newKey.passphrase=pass;
+      } else {
+        payload.keyId=keySel;
+      }
     }
     $('sfSave').disabled=true;
     if(editingServer)socket.emit('servers:update',{id:editingServer,...payload});

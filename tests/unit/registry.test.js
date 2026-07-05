@@ -70,10 +70,47 @@ describe('registry', () => {
     assert.throws(() => registry.addServer({ host: 'bad host!', user: 'root', keyId }), /Invalid host/);
     assert.throws(() => registry.addServer({ host: 'ok.example.com', port: 99999, user: 'root', keyId }), /Invalid port/);
     assert.throws(() => registry.addServer({ host: 'ok.example.com', user: 'root; rm -rf /', keyId }), /Invalid user/);
-    assert.throws(() => registry.addServer({ host: 'ok.example.com', user: 'root', keyId: 'key_nope' }), /Unknown key/);
+    assert.throws(() => registry.addServer({ host: 'ok.example.com', user: 'root', keyId: 'key_nope' }), /Pick an SSH key/);
     const srv = registry.addServer({ name: 'prod', host: 'ok.example.com', port: 22, user: 'root', keyId });
     assert.ok(srv.id.startsWith('srv_'));
     assert.equal(registry.getServer(srv.id).host, 'ok.example.com');
+  });
+
+  it('stores a password-auth server with the password encrypted', () => {
+    const srv = registry.addServer({ name: 'pw box', host: 'pw.example.com', user: 'root', authType: 'password', password: 'hunter2secret' });
+    assert.equal(srv.authType, 'password');
+    assert.equal(srv.keyId, undefined);
+    const raw = fs.readFileSync(registry.REG_FILE, 'utf8');
+    assert.ok(!raw.includes('hunter2secret')); // never on disk in plaintext
+    assert.equal(registry.getServerPassword(srv.id), 'hunter2secret');
+    // listServers exposes authType but never the password
+    const listed = registry.listServers().find(s => s.id === srv.id);
+    assert.equal(listed.authType, 'password');
+    assert.equal(listed.pw, undefined);
+    registry.removeServer(srv.id);
+  });
+
+  it('password server requires a password on add', () => {
+    assert.throws(() => registry.addServer({ host: 'x.example.com', user: 'root', authType: 'password' }), /Password required/);
+  });
+
+  it('editing a password server keeps the old password when none given', () => {
+    const srv = registry.addServer({ name: 'keep pw', host: 'k.example.com', user: 'root', authType: 'password', password: 'orig-pass' });
+    registry.updateServer(srv.id, { name: 'renamed pw' });
+    assert.equal(registry.getServerPassword(srv.id), 'orig-pass');
+    registry.updateServer(srv.id, { authType: 'password', password: 'new-pass' });
+    assert.equal(registry.getServerPassword(srv.id), 'new-pass');
+    registry.removeServer(srv.id);
+  });
+
+  it('switching a server from password to key clears the stored password', () => {
+    const { id: keyId } = registry.addKey({ name: 'switch key', privateKey: FAKE_KEY });
+    const srv = registry.addServer({ name: 'switcher', host: 's.example.com', user: 'root', authType: 'password', password: 'temp' });
+    registry.updateServer(srv.id, { authType: 'key', keyId });
+    assert.equal(registry.getServerPassword(srv.id), undefined);
+    assert.equal(registry.getServer(srv.id).authType, 'key');
+    registry.removeServer(srv.id);
+    registry.removeKey(keyId);
   });
 
   it('refuses to delete a key still used by a server', () => {
