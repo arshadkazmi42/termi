@@ -1293,11 +1293,17 @@
     socket=io({ auth:{token}, reconnection:true, reconnectionDelay:1000, reconnectionAttempts:Infinity });
 
     socket.on('connect',()=>{
+      // The socket being up is what "connected" means — one unreachable
+      // SSH target must never blank the dashboard or block other servers.
+      connected=true; hideSplash();
       $('reconnectBanner').classList.remove('visible');
       socket.emit('init',{serverId:curServer}); startLatencyPing();
+      startScreenRefresh();
+      applyRoute();   // render the current view and request its data now
+      if(route.view==='servers')socket.emit('servers:list');
       // Server-side ptys die when the socket drops — re-attach any open panes.
       screenPanes.forEach((p,k)=>{
-        socket.emit('screen:join',{serverId:route.server||curServer,sessionName:k,cols:p.term.cols||80,rows:p.term.rows||24});
+        socket.emit('screen:join',{serverId:p.serverId,sessionName:k,cols:p.term.cols||80,rows:p.term.rows||24});
       });
     });
     socket.on('disconnect',()=>{
@@ -1314,17 +1320,17 @@
         $('authError').textContent='Invalid token';
       }
     });
+    // Per-server readiness (chat CLI availability, session state). Purely
+    // informational — never gates rendering.
     socket.on('status',({serverId,connected:c,message,agentType,agentAvail,claudeAvail})=>{
       if(serverId&&serverId!==curServer)return;
-      connected=c; hideSplash();
-      setStatus(c?'on':'err',c?message:'offline');
+      hideSplash();
+      setStatus(c?'on':'err',message||'offline');
       if(c){
         $('sendBtn').disabled=false;
         if(agentType)setAgentUI(agentType);
         $('opt-agent').disabled=agentAvail===false;
         $('opt-claude').disabled=claudeAvail===false;
-        startScreenRefresh();
-        applyRoute();           // open any panes the URL asks for (deep link / reload)
         if(route.view==='screens'||route.view==='term')loadScreenSessions();
       }
     });
