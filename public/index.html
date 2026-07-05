@@ -1392,6 +1392,17 @@
       if(error)showToast(error);
       handleScreenExit(sessionName);
     });
+    // A rename changes the fullName — remap any open pane and the URL.
+    socket.on('screen:renamed',({serverId,oldFullName,newFullName})=>{
+      if(route.server&&serverId!==route.server)return;
+      if(screenPanes.has(oldFullName))removePane(oldFullName,true);
+      if(route.sessions.includes(oldFullName)){
+        const list=route.sessions.map(s=>s===oldFullName?newFullName:s);
+        history.replaceState(null,'',termHash(list));
+        applyRoute(); // reattaches under the new name
+      }
+      showToast('renamed to '+prettyName(newFullName));
+    });
     // ── Dashboard events ───────────────────────────
     socket.on('servers:list',({servers:list,keys})=>{
       servers=list.filter(s=>!s.local); sshKeys=keys||[];
@@ -1568,9 +1579,25 @@
         <div class="scr-name"></div>
         <div class="scr-meta"><span class="scr-badge"></span><span class="scr-pid"></span><span class="scr-badge live scr-open" hidden>open</span></div>
       </div>
+      <button type="button" class="srv-icon scr-rn" title="Rename session" aria-label="Rename session ${s.name}">&#9998;</button>
       <div class="scr-chevron">&#8250;</div>`;
     a.querySelector('.scr-name').textContent=s.name;
+    a.querySelector('.scr-rn').addEventListener('click',e=>{
+      e.preventDefault(); e.stopPropagation();
+      renameScreenPrompt(a.dataset.session,a.querySelector('.scr-name').textContent);
+    });
     return a;
+  }
+
+  function renameScreenPrompt(fullName,currentName){
+    if(!socket||!connected){showToast('not connected');return;}
+    const nn=prompt('Rename session:',currentName);
+    if(nn===null)return;
+    const clean=nn.trim().replace(/[^\w.\-]+/g,'-');
+    if(!clean||clean===currentName)return;
+    socket.emit('screen:rename',{serverId:route.server||curServer,sessionName:fullName,newName:clean});
+    showToast('renaming...');
+    haptic('medium');
   }
 
   function updateCard(a,s){

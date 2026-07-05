@@ -594,6 +594,26 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Rename a session in place (screen keeps the pid, so the new fullName
+  // is derivable). Broadcast so every client can remap open panes/URLs.
+  socket.on('screen:rename', async ({ serverId = LOCAL_ID, sessionName, newName }) => {
+    const clean = String(newName || '').replace(/[^\w.\-]/g, '-').slice(0, 40);
+    if (!SAFE_SESSION.test(sessionName) || !clean || !SAFE_SESSION.test(clean)) return;
+    console.log('[screen] rename:', serverId, sessionName, '→', clean);
+    try {
+      const cmd = `screen -S ${sessionName} -X sessionname ${clean}`;
+      if (serverId === LOCAL_ID) await execAsync(cmd, { timeout: 5000 });
+      else await remote.execOnServer(serverId, cmd, { timeout: 12000 });
+      probeCache.delete(serverId);
+      const pid = sessionName.split('.')[0];
+      io.emit('screen:renamed', { serverId, oldFullName: sessionName, newFullName: `${pid}.${clean}` });
+      const sessions = await listScreenSessions(serverId);
+      io.emit('screen:list', { serverId, sessions });
+    } catch (err) {
+      socket.emit('servers:error', { message: 'Rename failed: ' + err.message });
+    }
+  });
+
   socket.on('screen:join', ({ sessionName, cols, rows, serverId = LOCAL_ID }) => {
     console.log('[screen] join:', serverId, sessionName, `${cols}x${rows}`);
     attachScreen(socket, serverId, sessionName, cols, rows);
