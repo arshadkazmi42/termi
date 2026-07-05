@@ -806,6 +806,25 @@
     overflow: hidden; background: var(--surface);
   }
   .dash-empty { padding: 26px 20px; text-align: center; color: var(--text2); font-size: 0.9rem; border-top: 1px solid var(--border); }
+  /* Server cards — responsive grid: 1 col on phone, 2-3 on wider screens */
+  .srv-grid {
+    display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch;
+  }
+  @media (min-width: 620px) { .srv-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1000px) { .srv-grid { grid-template-columns: repeat(3, 1fr); } }
+  .srv-card {
+    display: flex; flex-direction: column;
+    padding: 15px 16px; border: 1px solid var(--border); border-radius: 14px;
+    background: var(--surface); cursor: pointer; transition: border-color 0.12s, background 0.12s;
+    min-width: 0;
+  }
+  .srv-card-head { display: flex; align-items: center; gap: 9px; }
+  .srv-card .srv-name { flex: 1; min-width: 0; }
+  .srv-card .srv-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .srv-card .srv-sub { margin-top: 7px; }
+  .srv-card .srv-acts { margin-top: auto; padding-top: 14px; }
+  .srv-card .srv-open { flex: 1; text-align: center; }
+  /* Old row list only applies to the keys page now */
   .srv-row {
     display: flex; align-items: center; gap: 12px;
     padding: 16px 18px; border-bottom: 1px solid var(--border);
@@ -813,6 +832,7 @@
   }
   .srv-row:last-of-type { border-bottom: none; }
   @media (hover: hover) {
+    .srv-card:hover { border-color: var(--border-hi); background: var(--surface2); }
     .srv-row:hover { background: rgba(255,255,255,0.03); }
     .srv-open:hover { border-color: var(--border-hi); }
     .srv-icon:hover { color: var(--text); border-color: var(--border-hi); }
@@ -1085,8 +1105,8 @@
         <a class="dash-add-top" href="#/keys">ssh keys</a>
         <button type="button" class="dash-add-top" id="addServerBtn" onclick="openServerForm()">+ add server</button>
       </div>
-      <div class="dash-list" id="serverList" role="list" aria-label="Configured servers"></div>
-      <div class="dash-empty" id="serverNoMatch" hidden>No servers match your search.</div>
+      <div class="srv-grid" id="serverList" role="list" aria-label="Configured servers"></div>
+      <div class="dash-empty" id="serverNoMatch" hidden style="border:1px solid var(--border);border-radius:14px;margin-top:12px">No servers match your search.</div>
       <div class="dash-empty" id="serverListEmpty" hidden style="border:1px dashed var(--border-hi);border-radius:14px;margin-top:12px">
         No other servers yet — add one with an IP and SSH key to manage it from here.
       </div>
@@ -1718,30 +1738,33 @@
   }
 
   function buildServerRow(s){
-    const row=document.createElement('div');
-    row.className='srv-row'; row.dataset.server=s.id; row.setAttribute('role','listitem');
+    const card=document.createElement('div');
+    card.className='srv-card'; card.dataset.server=s.id; card.setAttribute('role','listitem');
     const isLocal=s.id==='local';
-    row.innerHTML=`<span class="srv-dot unk"></span>
-      <div class="srv-info">
-        <div class="srv-name"><span class="srv-name-text"></span><span class="srv-badge sb-local" ${isLocal?'':'hidden'}>local</span><span class="srv-badge sb-scr srv-scr" hidden></span><span class="srv-badge sb-off srv-off" hidden>offline</span></div>
-        <div class="srv-sub"></div>
-        <div class="srv-err" hidden></div>
-        <div class="srv-screens" hidden></div>
+    card.innerHTML=`<div class="srv-card-head">
+        <span class="srv-dot unk"></span>
+        <div class="srv-name"><span class="srv-name-text"></span></div>
+        <span class="srv-badge sb-local" ${isLocal?'':'hidden'}>local</span>
+        <span class="srv-badge sb-scr srv-scr" hidden></span>
+        <span class="srv-badge sb-off srv-off" hidden>offline</span>
       </div>
+      <div class="srv-sub"></div>
+      <div class="srv-err" hidden></div>
+      <div class="srv-screens" hidden></div>
       <div class="srv-acts">
         <a class="srv-open" href="${srvHash(s.id,'screens')}">Open</a>
         <button type="button" class="srv-icon srv-edit" title="Edit server" aria-label="Edit ${s.name}" ${isLocal?'hidden':''}>&#9998;</button>
         <button type="button" class="srv-icon del srv-del" title="Remove server" aria-label="Remove ${s.name}" ${isLocal?'hidden':''}>&times;</button>
       </div>`;
-    row.querySelector('.srv-edit').addEventListener('click',()=>openServerForm(s.id));
-    row.querySelector('.srv-del').addEventListener('click',()=>deleteServer(s.id));
-    // The whole row is a target; buttons and the Open link handle themselves.
-    row.addEventListener('click',e=>{
+    card.querySelector('.srv-edit').addEventListener('click',()=>openServerForm(s.id));
+    card.querySelector('.srv-del').addEventListener('click',()=>deleteServer(s.id));
+    // The whole card is a target; buttons, links, and chips handle themselves.
+    card.addEventListener('click',e=>{
       if(e.target.closest('button,a'))return;
       haptic('light');
       location.hash=srvHash(s.id,'screens');
     });
-    return row;
+    return card;
   }
 
   function updateDashStats(){
@@ -1762,7 +1785,7 @@
   }
   function applyServerFilter(){
     let visible=0;
-    $('serverList').querySelectorAll('.srv-row[data-server]').forEach(r=>{
+    $('serverList').querySelectorAll('.srv-card[data-server]').forEach(r=>{
       const hit=!srvFilter||(r.dataset.search||'').includes(srvFilter);
       r.style.display=hit?'':'none';
       if(hit)visible++;
@@ -1773,7 +1796,7 @@
   const CHIP_CAP=3;
 
   function updateServerRow(id){
-    const row=$('serverList').querySelector(`.srv-row[data-server="${cssEsc(id)}"]`);
+    const row=$('serverList').querySelector(`.srv-card[data-server="${cssEsc(id)}"]`);
     if(!row)return;
     const s=id==='local'?{name:'this server'}:servers.find(x=>x.id===id);
     if(!s)return;
@@ -1832,11 +1855,11 @@
     const seen=new Set();
     all.forEach(s=>{
       seen.add(s.id);
-      let row=list.querySelector(`.srv-row[data-server="${cssEsc(s.id)}"]`);
+      let row=list.querySelector(`.srv-card[data-server="${cssEsc(s.id)}"]`);
       if(!row){row=buildServerRow(s);list.appendChild(row);}
       updateServerRow(s.id);
     });
-    list.querySelectorAll('.srv-row[data-server]').forEach(r=>{ if(!seen.has(r.dataset.server))r.remove(); });
+    list.querySelectorAll('.srv-card[data-server]').forEach(r=>{ if(!seen.has(r.dataset.server))r.remove(); });
     $('serverListEmpty').hidden=servers.length>0;
     applyServerFilter();
     refreshKeySelect();
