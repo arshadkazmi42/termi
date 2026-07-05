@@ -192,9 +192,20 @@
     background: linear-gradient(135deg, #6e72f0, #5a5ed6);
     display: flex; align-items: center; justify-content: center;
     font-family: var(--mono); font-weight: 700; font-size: 13px; color: #fff;
-    flex-shrink: 0;
+    flex-shrink: 0; text-decoration: none;
   }
-  .h-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
+  .h-word {
+    font-weight: 700; font-size: 1rem; color: var(--text);
+    text-decoration: none; margin-right: auto; flex-shrink: 0;
+  }
+  /* Server context (name + screens/chat tabs) — only shown inside a server */
+  .h-ctx { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .h-crumb { color: var(--dim); font-family: var(--mono); flex-shrink: 0; }
+  .h-srv {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text2);
+    max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .h-tabs { display: flex; gap: 4px; min-width: 0; }
   .tab {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 7px 12px; font-family: var(--mono); font-size: 12px; font-weight: 500;
@@ -831,6 +842,23 @@
     font-family: var(--mono); font-size: 0.72rem; color: var(--text2);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;
   }
+  .srv-err {
+    font-family: var(--mono); font-size: 0.68rem; color: var(--red);
+    margin-top: 4px; word-break: break-word;
+  }
+  .srv-screens { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+  .srv-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    padding: 4px 11px; border: 1px solid var(--border); border-radius: 16px;
+    color: var(--text2); text-decoration: none; transition: all 0.12s;
+  }
+  .srv-chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .srv-chip.live::before { background: #5fd08b; }
+  .srv-chip.idle::before { background: var(--orange); }
+  @media (hover: hover) {
+    .srv-chip:hover { color: var(--text); border-color: var(--border-hi); background: var(--surface2); }
+  }
   .srv-badge {
     font-size: 0.62rem; font-weight: 700; padding: 3px 8px; border-radius: 20px;
     text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0;
@@ -870,12 +898,12 @@
     font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase;
     letter-spacing: 1.2px; color: var(--dim);
   }
-  .sf-field input, .sf-field select, .sf-keytext {
+  .sf-field input, .sf-field select, .sf-keytext, .sf-keypass {
     background: var(--bg); border: 1.5px solid var(--border); border-radius: 9px;
     color: var(--text); font-family: var(--mono); font-size: 16px;
     padding: 10px 12px; outline: none; width: 100%;
   }
-  .sf-field input:focus, .sf-field select:focus, .sf-keytext:focus { border-color: var(--green); }
+  .sf-field input:focus, .sf-field select:focus, .sf-keytext:focus, .sf-keypass:focus { border-color: var(--green); }
   .sf-keytext { min-height: 110px; resize: vertical; font-size: 12px; }
   .sf-err { color: var(--red); font-family: var(--mono); font-size: 0.75rem; min-height: 15px; }
   .sf-row { display: flex; gap: 10px; }
@@ -1006,11 +1034,15 @@
 <!-- App -->
 <div id="app">
   <header class="header">
-    <div class="h-logo">t_</div>
-    <nav class="h-tabs" aria-label="Main navigation">
-      <a class="tab active" id="tab-servers" href="#/servers">servers</a>
-      <a class="tab" id="tab-screens" href="#/srv/local/screens">screens <span class="tab-dot" id="screenBadge"></span></a>
-      <a class="tab" id="tab-chat" href="#/srv/local/chat">chat</a>
+    <a class="h-logo" href="#/servers" aria-label="termi — all servers">t_</a>
+    <a class="h-word" href="#/servers">termi</a>
+    <nav class="h-ctx" id="hCtx" hidden aria-label="Server navigation">
+      <span class="h-crumb">/</span>
+      <span class="h-srv" id="hSrvName"></span>
+      <div class="h-tabs">
+        <a class="tab" id="tab-screens" href="#/srv/local/screens">screens <span class="tab-dot" id="screenBadge"></span></a>
+        <a class="tab" id="tab-chat" href="#/srv/local/chat">chat</a>
+      </div>
     </nav>
     <div class="h-busy" id="busySpinner"></div>
     <div class="h-status" onclick="showLatency()">
@@ -1069,6 +1101,7 @@
           <select id="sfKey" onchange="onKeySelect()"></select>
         </label>
         <textarea id="sfKeyText" class="sf-keytext" placeholder="paste private key (OpenSSH / PEM) — stored encrypted, never shown again" hidden autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+        <input id="sfKeyPass" class="sf-keypass" type="password" placeholder="key passphrase — leave empty if the key has none" hidden autocomplete="off">
         <div class="sf-err" id="sfError" role="alert"></div>
         <div class="sf-row">
           <button type="button" class="sf-btn" onclick="closeServerForm()">cancel</button>
@@ -1346,6 +1379,7 @@
       if(curServer!=='local'&&!servers.some(s=>s.id===curServer)){
         curServer='local'; localStorage.setItem('termi_server','local');
       }
+      if(!$('hCtx').hidden)$('hSrvName').textContent=serverLabel();
       renderServerDash();
     });
     socket.on('servers:status',(st)=>{
@@ -1416,11 +1450,16 @@
     const r=route;
     if(r.server&&r.server!==curServer){ curServer=r.server; localStorage.setItem('termi_server',curServer); }
 
-    $('tab-servers').classList.toggle('active',r.view==='servers');
-    $('tab-screens').classList.toggle('active',r.view==='screens'||r.view==='term');
-    $('tab-chat').classList.toggle('active',r.view==='chat');
-    $('tab-screens').setAttribute('href',srvHash(curServer,'screens'));
-    $('tab-chat').setAttribute('href',srvHash(curServer,'chat'));
+    // Screens/chat only exist inside a server; the dashboard is the top level.
+    const inServer=r.view==='screens'||r.view==='term'||r.view==='chat';
+    $('hCtx').hidden=!inServer;
+    if(inServer){
+      $('hSrvName').textContent=serverLabel();
+      $('tab-screens').classList.toggle('active',r.view==='screens'||r.view==='term');
+      $('tab-chat').classList.toggle('active',r.view==='chat');
+      $('tab-screens').setAttribute('href',srvHash(curServer,'screens'));
+      $('tab-chat').setAttribute('href',srvHash(curServer,'chat'));
+    }
     $('view-servers').classList.toggle('active',r.view==='servers');
     $('view-screens').classList.toggle('active',r.view==='screens');
     $('view-term').classList.toggle('active',r.view==='term');
@@ -1583,6 +1622,8 @@
       <div class="srv-info">
         <div class="srv-name"><span class="srv-name-text"></span><span class="srv-badge sb-local" ${isLocal?'':'hidden'}>local</span><span class="srv-badge sb-scr srv-scr" hidden></span><span class="srv-badge sb-off srv-off" hidden>offline</span></div>
         <div class="srv-sub"></div>
+        <div class="srv-err" hidden></div>
+        <div class="srv-screens" hidden></div>
       </div>
       <div class="srv-acts">
         <a class="srv-open" href="${srvHash(s.id,'screens')}">Open</a>
@@ -1625,6 +1666,28 @@
     scr.hidden=!(st.online&&typeof st.screens==='number');
     if(!scr.hidden)scr.textContent=st.screens+(st.screens===1?' screen':' screens');
     off.hidden=st.online!==false;
+    // Real failure reason beats a bare "offline"
+    const errEl=row.querySelector('.srv-err');
+    errEl.hidden=!(st.online===false&&st.error);
+    if(!errEl.hidden)errEl.textContent=String(st.error).slice(0,140);
+    // Screen sessions as chips — tap one to land straight in that terminal.
+    // Keyed by content so the 5s refresh never swaps a chip mid-tap.
+    const chips=row.querySelector('.srv-screens');
+    const sess=st.sessions||[];
+    const ser=JSON.stringify(sess.map(x=>[x.fullName,x.status]));
+    if(chips.dataset.ser!==ser){
+      chips.dataset.ser=ser;
+      chips.innerHTML='';
+      sess.forEach(x=>{
+        const a=document.createElement('a');
+        a.className='srv-chip '+(x.status==='attached'?'live':'idle');
+        a.href=srvHash(id,'screen/'+encodeURIComponent(x.fullName));
+        a.textContent=x.name;
+        a.setAttribute('aria-label','Open screen '+x.name+' on '+s.name);
+        chips.appendChild(a);
+      });
+    }
+    chips.hidden=sess.length===0;
   }
 
   // Keyed in-place rendering (same trick as the screen list) so the 5s
@@ -1664,7 +1727,9 @@
   }
 
   function onKeySelect(){
-    $('sfKeyText').hidden=$('sfKey').value!=='__new__';
+    const pasting=$('sfKey').value==='__new__';
+    $('sfKeyText').hidden=!pasting;
+    $('sfKeyPass').hidden=!pasting;
   }
 
   function openServerForm(id){
@@ -1678,6 +1743,7 @@
     $('sfPort').value=s?(s.port||22):22;
     $('sfError').textContent='';
     $('sfKeyText').value='';
+    $('sfKeyPass').value='';
     refreshKeySelect();
     if(s&&s.keyId&&[...$('sfKey').options].some(o=>o.value===s.keyId))$('sfKey').value=s.keyId;
     onKeySelect();
@@ -1708,6 +1774,8 @@
       const material=$('sfKeyText').value.trim();
       if(!material){err.textContent='Paste a private key or pick a stored one.';return;}
       payload.newKey={name:(payload.name||'key')+' key',privateKey:material};
+      const pass=$('sfKeyPass').value;
+      if(pass)payload.newKey.passphrase=pass;
     } else {
       payload.keyId=keySel;
     }

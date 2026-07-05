@@ -416,15 +416,20 @@ async function probeAndEmit(serverId, force) {
       execAsync('which agent', { env: AGENT_ENV }).then(() => true).catch(() => false),
       execAsync('which claude', { env: AGENT_ENV }).then(() => true).catch(() => false),
     ]);
-    result = { online: true, hasScreen: true, hasClaude: claudeAvail, hasAgent: agentAvail, screens: sessions.length };
+    result = {
+      online: true, hasScreen: true, hasClaude: claudeAvail, hasAgent: agentAvail,
+      screens: sessions.length, sessions: sessions.slice(0, 16),
+    };
   } else {
     const probe = await remote.probeServer(serverId);
+    const sessions = probe.screenLs ? parseScreenLs(probe.screenLs) : [];
     result = {
       online: probe.online,
       hasScreen: !!probe.hasScreen,
       hasClaude: !!probe.hasClaude,
       hasAgent: !!probe.hasAgent,
-      screens: probe.screenLs ? parseScreenLs(probe.screenLs).length : 0,
+      screens: sessions.length,
+      sessions: sessions.slice(0, 16),
       error: probe.error,
     };
   }
@@ -602,7 +607,7 @@ io.on('connection', (socket) => {
     try {
       let keyId = input.keyId;
       if (input.newKey && input.newKey.privateKey) {
-        keyId = registry.addKey({ name: input.newKey.name || input.name + ' key', privateKey: input.newKey.privateKey }).id;
+        keyId = registry.addKey({ name: input.newKey.name || input.name + ' key', privateKey: input.newKey.privateKey, passphrase: input.newKey.passphrase }).id;
       }
       const server = registry.addServer({ ...input, keyId });
       io.emit('servers:list', serverListPayload());
@@ -616,7 +621,7 @@ io.on('connection', (socket) => {
     try {
       let keyId = input.keyId;
       if (input.newKey && input.newKey.privateKey) {
-        keyId = registry.addKey({ name: input.newKey.name || input.name + ' key', privateKey: input.newKey.privateKey }).id;
+        keyId = registry.addKey({ name: input.newKey.name || input.name + ' key', privateKey: input.newKey.privateKey, passphrase: input.newKey.passphrase }).id;
       }
       registry.updateServer(id, { ...input, ...(keyId ? { keyId } : {}) });
       probeCache.delete(id);

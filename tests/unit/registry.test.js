@@ -35,7 +35,15 @@ describe('registry', () => {
     const raw = fs.readFileSync(registry.REG_FILE, 'utf8');
     assert.ok(!raw.includes('fakekeymaterial'));
     // But material is recoverable
-    assert.ok(registry.getKeyMaterial(id).includes('fakekeymaterial'));
+    assert.ok(registry.getKeyMaterial(id).privateKey.includes('fakekeymaterial'));
+    assert.equal(registry.getKeyMaterial(id).passphrase, undefined);
+  });
+
+  it('stores and recovers a key passphrase, encrypted', () => {
+    const { id } = registry.addKey({ name: 'pp key', privateKey: FAKE_KEY, passphrase: 'sekret-pass' });
+    const raw = fs.readFileSync(registry.REG_FILE, 'utf8');
+    assert.ok(!raw.includes('sekret-pass'));
+    assert.equal(registry.getKeyMaterial(id).passphrase, 'sekret-pass');
   });
 
   it('validates server input', () => {
