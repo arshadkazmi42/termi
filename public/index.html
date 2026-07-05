@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0b0b0f">
+<meta name="theme-color" content="#0a0a0c">
 <link rel="manifest" href="/manifest.json">
 <title>termi</title>
 <script src="/socket.io/socket.io.js"></script>
@@ -14,33 +14,36 @@
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&f[]=clash-display@600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:         #0b0b0f;
-    --bg2:        #0e0e14;
-    --surface:    #13131a;
-    --surface2:   #1a1a24;
-    --surface3:   #22222e;
-    --border:     #1f1f2e;
-    --border-hi:  #2d2d3f;
-    --green:      #22dd88;
-    --green-dim:  rgba(34,221,136,0.08);
-    --green-mid:  rgba(34,221,136,0.15);
-    --green-glow: rgba(34,221,136,0.25);
+    --bg:         #0a0a0c;
+    --bg2:        #0c0c10;
+    --surface:    #111116;
+    --surface2:   #17171d;
+    --surface3:   #1f1f27;
+    --border:     rgba(255,255,255,0.08);
+    --border-hi:  rgba(255,255,255,0.2);
+    --green:      #6e72f0;
+    --green-dim:  rgba(110,114,240,0.08);
+    --green-mid:  rgba(110,114,240,0.15);
+    --green-glow: rgba(110,114,240,0.25);
     --blue:       #6ba1ff;
     --blue-dim:   rgba(107,161,255,0.08);
-    --red:        #ff6b6b;
-    --red-dim:    rgba(255,107,107,0.08);
-    --orange:     #ffb347;
-    --orange-dim: rgba(255,179,71,0.08);
+    --red:        #f0746a;
+    --red-dim:    rgba(240,116,106,0.08);
+    --orange:     #febc2e;
+    --orange-dim: rgba(254,188,46,0.08);
     --purple:     #c084fc;
     --cyan:       #22d3ee;
-    --text:       #e8e8ef;
-    --text2:      #a0a0b8;
-    --dim:        #555568;
+    --text:       #f4f5f7;
+    --text2:      #8a8d99;
+    --dim:        #5a5d68;
     --mono:       'JetBrains Mono', 'SF Mono', monospace;
-    --sans:       'Inter', -apple-system, sans-serif;
+    --sans:       'Satoshi', 'Inter', -apple-system, sans-serif;
+    --display:    'Clash Display', 'Satoshi', sans-serif;
     --r:          14px;
     --r-sm:       10px;
     --r-lg:       18px;
@@ -76,9 +79,9 @@
 
   .splash-icon {
     width: 80px; height: 80px; border-radius: 22px;
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
     display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-weight: 700; font-size: 32px; color: #000;
+    font-family: var(--mono); font-weight: 700; font-size: 32px; color: #fff;
     box-shadow: 0 0 60px var(--green-glow), 0 0 120px var(--green-dim);
     animation: sPulse 2s ease-in-out infinite;
   }
@@ -138,9 +141,9 @@
   .auth-head { display: flex; align-items: center; gap: 12px; }
   .auth-icon {
     width: 44px; height: 44px; border-radius: 12px;
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
     display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-weight: 700; font-size: 18px; color: #000;
+    font-family: var(--mono); font-weight: 700; font-size: 18px; color: #fff;
   }
   .auth-title { font-family: var(--mono); font-size: 20px; font-weight: 600; }
   .auth-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
@@ -154,8 +157,8 @@
   }
   .auth-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
   .auth-btn {
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
-    color: #000; border: none; border-radius: var(--r-sm);
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
+    color: #fff; border: none; border-radius: var(--r-sm);
     padding: 13px; font-family: var(--mono); font-size: 13px; font-weight: 700;
     cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px;
   }
@@ -179,9 +182,9 @@
   }
   .h-logo {
     width: 32px; height: 32px; border-radius: 9px;
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
     display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-weight: 700; font-size: 13px; color: #000;
+    font-family: var(--mono); font-weight: 700; font-size: 13px; color: #fff;
     flex-shrink: 0;
   }
   .h-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
@@ -278,7 +281,7 @@
     color: var(--dim); background: none; border: none; border-radius: 6px;
     cursor: pointer; transition: all 0.15s;
   }
-  .agent-btn.active { background: var(--green); color: #000; font-weight: 700; }
+  .agent-btn.active { background: var(--green); color: #fff; font-weight: 700; }
   .agent-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
   /* ── Queue ──────────────────────────────────────── */
@@ -290,7 +293,7 @@
   }
   .queue-bar.on { display: flex; }
   .queue-n {
-    background: var(--green); color: #000; border-radius: 4px;
+    background: var(--green); color: #fff; border-radius: 4px;
     padding: 0 6px; font-weight: 700; font-size: 10px;
   }
 
@@ -339,7 +342,7 @@
     opacity: 0; transition: opacity 0.15s;
   }
   .cmd-output:hover .copy-btn { opacity: 1; }
-  .cmd-output .copy-btn:active { background: var(--green); color: #000; border-color: var(--green); }
+  .cmd-output .copy-btn:active { background: var(--green); color: #fff; border-color: var(--green); }
 
   .cmd-expand {
     padding: 0 14px 8px; font-family: var(--mono); font-size: 11px;
@@ -457,8 +460,8 @@
   .prompt-ta::placeholder { color: var(--dim); }
   .prompt-send {
     width: 38px; height: 38px; border-radius: 10px;
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
-    border: none; color: #000; font-size: 16px; font-weight: 700;
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
+    border: none; color: #fff; font-size: 16px; font-weight: 700;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     flex-shrink: 0; transition: all 0.15s; font-family: var(--mono);
   }
@@ -599,7 +602,7 @@
     display: inline-flex; align-items: center; gap: 5px; transition: all 0.1s;
     text-decoration: none; flex-shrink: 0;
   }
-  .stv-back:active { background: var(--green); color: #000; }
+  .stv-back:active { background: var(--green); color: #fff; }
   .stv-name {
     font-family: var(--mono); font-size: 13px; font-weight: 600; flex: 1;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
@@ -645,7 +648,7 @@
     width: 22px; height: 22px; border-radius: 6px; cursor: pointer; flex-shrink: 0;
     font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
   }
-  .scr-pane-close:active { background: var(--red); color: #000; }
+  .scr-pane-close:active { background: var(--red); color: #fff; }
   .scr-pane-term { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 1px; }
 
   /* Terminal input bar — always visible, plain form: works for humans,
@@ -669,7 +672,7 @@
     font-weight: 600; border-radius: 8px; cursor: pointer; padding: 0 12px;
     transition: all 0.1s;
   }
-  .stv-input-send.primary { background: linear-gradient(135deg, #22dd88, #1aaf6a); color: #000; border-color: transparent; }
+  .stv-input-send.primary { background: linear-gradient(135deg, #6e72f0, #5a5ed6); color: #fff; border-color: transparent; }
   .stv-input-send:active { transform: scale(0.96); }
 
   /* Special-keys bar — always visible in the terminal view */
@@ -689,7 +692,7 @@
     display: inline-flex; align-items: center; justify-content: center;
     padding: 0 10px; transition: all 0.1s; user-select: none;
   }
-  .stv-key:active { background: var(--green); color: #000; transform: scale(0.94); }
+  .stv-key:active { background: var(--green); color: #fff; transform: scale(0.94); }
   .stv-key.kbd { color: var(--green); }
 
   /* iOS Safari auto-zooms the page when a focused input's font is under
@@ -728,7 +731,7 @@
     box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   }
   #app.term-fs .term-fs-exit { display: inline-flex; }
-  .term-fs-exit:active { opacity: 1; background: var(--green); color: #000; }
+  .term-fs-exit:active { opacity: 1; background: var(--green); color: #fff; }
 
   /* ── Scroll-to-bottom FAB ────────────────────────── */
   .scroll-fab {
@@ -741,8 +744,101 @@
     font-family: var(--mono);
   }
   .scroll-fab.visible { display: flex; animation: fabIn 0.2s ease; }
-  .scroll-fab:active { transform: scale(0.9); background: var(--green); color: #000; }
+  .scroll-fab:active { transform: scale(0.9); background: var(--green); color: #fff; }
   @keyframes fabIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+
+  /* ── Servers dashboard (ireel-style) ────────────── */
+  .dash-wrap {
+    flex: 1; min-height: 0; overflow-y: auto; width: 100%;
+    max-width: 720px; margin: 0 auto;
+    padding: 22px 16px calc(28px + var(--safe-b));
+    -webkit-overflow-scrolling: touch;
+  }
+  .dash-title {
+    font-family: var(--display); font-size: 1.65rem; font-weight: 600;
+    letter-spacing: -0.02em; margin: 4px 0 4px;
+  }
+  .dash-sub { color: var(--text2); font-size: 0.92rem; margin-bottom: 20px; }
+  .dash-list {
+    border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; background: var(--surface);
+  }
+  .dash-empty { padding: 34px 20px; text-align: center; color: var(--text2); font-size: 0.9rem; }
+  .srv-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 15px 16px; border-bottom: 1px solid var(--border);
+  }
+  .srv-row:last-child { border-bottom: none; }
+  .srv-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--dim); }
+  .srv-dot.on  { background: #5fd08b; box-shadow: 0 0 8px rgba(95,208,139,0.5); }
+  .srv-dot.off { background: var(--red); }
+  .srv-dot.unk { background: var(--dim); animation: srvPulse 1.4s ease-in-out infinite; }
+  @keyframes srvPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .srv-info { flex: 1; min-width: 0; }
+  .srv-name { font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+  .srv-sub {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--text2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;
+  }
+  .srv-badge {
+    font-size: 0.62rem; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0;
+  }
+  .sb-scr   { background: var(--green-mid); color: var(--green); }
+  .sb-off   { background: var(--red-dim); color: var(--red); }
+  .sb-local { background: rgba(255,255,255,0.07); color: var(--text2); }
+  .srv-acts { display: flex; gap: 7px; align-items: center; flex-shrink: 0; }
+  .srv-open {
+    font-size: 0.85rem; font-weight: 600; color: var(--text);
+    border: 1px solid var(--border); padding: 7px 13px; border-radius: 9px;
+    text-decoration: none;
+  }
+  .srv-open:active { border-color: var(--green); color: var(--green); }
+  .srv-icon {
+    background: none; border: 1px solid var(--border); border-radius: 9px;
+    width: 32px; height: 32px; display: inline-flex; align-items: center;
+    justify-content: center; color: var(--text2); cursor: pointer; padding: 0;
+    font-size: 13px;
+  }
+  .srv-icon:active { color: var(--text); border-color: var(--border-hi); }
+  .srv-icon.del:active { color: var(--red); border-color: var(--red); }
+  .dash-add {
+    margin: 14px 0 18px; width: 100%; padding: 13px; border-radius: 12px;
+    border: 1px dashed var(--border-hi); background: none; color: var(--text2);
+    font-family: var(--mono); font-size: 0.85rem; cursor: pointer;
+  }
+  .dash-add:active { color: var(--green); border-color: var(--green); }
+  .srv-form {
+    border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+    padding: 16px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;
+  }
+  .sf-title { font-weight: 700; font-size: 1rem; }
+  .sf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .sf-field {
+    display: flex; flex-direction: column; gap: 5px;
+    font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--dim);
+  }
+  .sf-field input, .sf-field select, .sf-keytext {
+    background: var(--bg); border: 1.5px solid var(--border); border-radius: 9px;
+    color: var(--text); font-family: var(--mono); font-size: 16px;
+    padding: 10px 12px; outline: none; width: 100%;
+  }
+  .sf-field input:focus, .sf-field select:focus, .sf-keytext:focus { border-color: var(--green); }
+  .sf-keytext { min-height: 110px; resize: vertical; font-size: 12px; }
+  .sf-err { color: var(--red); font-family: var(--mono); font-size: 0.75rem; min-height: 15px; }
+  .sf-row { display: flex; gap: 10px; }
+  .sf-btn {
+    flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); cursor: pointer;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+  }
+  .sf-btn.primary { background: linear-gradient(135deg, #6e72f0, #5a5ed6); color: #fff; border: none; }
+  .sf-btn:active { transform: scale(0.98); }
+  @media (max-width: 520px) {
+    .sf-grid { grid-template-columns: 1fr 1fr; }
+    .srv-open { padding: 7px 10px; font-size: 0.8rem; }
+  }
 
   /* ── Animated Success / Error ──────────────────── */
   .anim-check, .anim-x {
@@ -860,8 +956,9 @@
   <header class="header">
     <div class="h-logo">t_</div>
     <nav class="h-tabs" aria-label="Main navigation">
-      <a class="tab active" id="tab-screens" href="#/screens">screens <span class="tab-dot" id="screenBadge"></span></a>
-      <a class="tab" id="tab-chat" href="#/chat">chat</a>
+      <a class="tab active" id="tab-servers" href="#/servers">servers</a>
+      <a class="tab" id="tab-screens" href="#/srv/local/screens">screens <span class="tab-dot" id="screenBadge"></span></a>
+      <a class="tab" id="tab-chat" href="#/srv/local/chat">chat</a>
     </nav>
     <div class="h-busy" id="busySpinner"></div>
     <div class="h-status" onclick="showLatency()">
@@ -878,7 +975,8 @@
         <div class="h-drop-sep"></div>
         <div class="h-drop-item" style="cursor:default; font-size:10px; color:var(--dim)">Theme</div>
         <div class="theme-row">
-          <div class="theme-dot active" style="background:linear-gradient(135deg,#22dd88,#1aaf6a)" onclick="setTheme('green')"></div>
+          <div class="theme-dot active" style="background:linear-gradient(135deg,#6e72f0,#5a5ed6)" onclick="setTheme('indigo')"></div>
+          <div class="theme-dot" style="background:linear-gradient(135deg,#22dd88,#1aaf6a)" onclick="setTheme('green')"></div>
           <div class="theme-dot" style="background:linear-gradient(135deg,#6ba1ff,#3b82f6)" onclick="setTheme('blue')"></div>
           <div class="theme-dot" style="background:linear-gradient(135deg,#ffb347,#f59e0b)" onclick="setTheme('amber')"></div>
           <div class="theme-dot" style="background:linear-gradient(135deg,#c084fc,#9333ea)" onclick="setTheme('purple')"></div>
@@ -889,7 +987,37 @@
     </div>
   </header>
 
-  <!-- ── Screens: session list (default view) ─────── -->
+  <!-- ── Servers dashboard (landing view) ──────────── -->
+  <section class="view" id="view-servers">
+    <div class="dash-wrap">
+      <h1 class="dash-title">Your servers</h1>
+      <p class="dash-sub">Pick a box to see its screens, or add one over SSH.</p>
+      <div class="dash-list" id="serverList" role="list" aria-label="Configured servers">
+        <div class="dash-empty" id="serverListEmpty" hidden>No remote servers yet — add one below.</div>
+      </div>
+      <button type="button" class="dash-add" id="addServerBtn" onclick="openServerForm()">+ add server</button>
+      <form class="srv-form" id="serverForm" hidden onsubmit="saveServerForm(event)">
+        <div class="sf-title" id="sfTitle">Add server</div>
+        <div class="sf-grid">
+          <label class="sf-field">name<input id="sfName" placeholder="prod-1" autocomplete="off"></label>
+          <label class="sf-field">host / ip<input id="sfHost" placeholder="203.0.113.10" autocomplete="off" required></label>
+          <label class="sf-field">user<input id="sfUser" value="root" autocomplete="off"></label>
+          <label class="sf-field">port<input id="sfPort" type="number" value="22" min="1" max="65535"></label>
+        </div>
+        <label class="sf-field">ssh key
+          <select id="sfKey" onchange="onKeySelect()"></select>
+        </label>
+        <textarea id="sfKeyText" class="sf-keytext" placeholder="paste private key (OpenSSH / PEM) — stored encrypted, never shown again" hidden autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+        <div class="sf-err" id="sfError" role="alert"></div>
+        <div class="sf-row">
+          <button type="button" class="sf-btn" onclick="closeServerForm()">cancel</button>
+          <button type="submit" class="sf-btn primary" id="sfSave">save server</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ── Screens: session list ──────────────────────── -->
   <section class="view active" id="view-screens">
     <div class="scr-header">
       <h2 class="scr-title"><span id="scrTitleText">sessions</span> <span class="scr-count" id="screenCount">0</span></h2>
@@ -916,7 +1044,7 @@
   <!-- ── Terminal view ─────────────────────────────── -->
   <section class="view" id="view-term">
     <div class="stv-header">
-      <a class="stv-back" href="#/screens" aria-label="Back to session list">&#8592; sessions</a>
+      <a class="stv-back" id="termBackBtn" href="#/screens" aria-label="Back to session list">&#8592; sessions</a>
       <h2 class="stv-name" id="termName"></h2>
       <span class="stv-status" id="termStatus" role="status"></span>
       <a class="stv-back" id="addPaneBtn" href="#/screens" hidden aria-label="Open another session in a split pane" style="padding:5px 9px">+ split</a>
@@ -1010,12 +1138,19 @@
   let socket=null, token='', connected=false, thinkingEl=null;
   let activeAgent='agent', lastThinkingContent='', latencyMs=null, latencyInterval=null;
   // Route fully describes what's on screen:
-  //   #/screens                  → session list (the default tab)
-  //   #/screen/<a>[,<b>...]      → terminal view with those panes open
-  //   #/screens/add/<a>[,<b>]    → session list shown to pick an extra pane, panes kept alive
-  //   #/chat                     → agent chat
+  //   #/servers                        → servers dashboard (the landing view)
+  //   #/srv/<id>/screens               → session list for that server
+  //   #/srv/<id>/screen/<a>[,<b>...]   → terminal view with those panes open
+  //   #/srv/<id>/screens/add/<a>[,<b>] → session list shown to pick an extra pane
+  //   #/srv/<id>/chat                  → agent chat on that server
+  // Legacy #/screens, #/screen/x, #/chat routes map to the 'local' server.
   // Every navigation is a URL change, so links/back-button/automation all agree.
-  let route={view:'screens',sessions:[],add:false};
+  let route={view:'servers',server:null,sessions:[],add:false};
+  let servers=[];                // servers:list payload
+  let sshKeys=[];                // stored key metadata (never the material)
+  const serverStatus={};         // id → last servers:status payload
+  let curServer=localStorage.getItem('termi_server')||'local';
+  let editingServer=null;        // server id while the edit form is open
   const screenPanes=new Map(); // fullName -> { term, fit, paneEl, name, status }
   let focusedScreen=null;      // fullName of the pane that receives input
   let pendingFocus=null;       // pane to focus after the next route sync
@@ -1026,7 +1161,7 @@
   let swipeStartX=0, swipeStartY=0;
   let lastInputMsg='';
   let autoScroll=true, agentBusy=false;
-  let currentTheme=localStorage.getItem('termi_theme')||'green';
+  let currentTheme=localStorage.getItem('termi_theme')||'indigo';
 
   const $=id=>document.getElementById(id);
 
@@ -1065,10 +1200,10 @@
 
     socket.on('connect',()=>{
       $('reconnectBanner').classList.remove('visible');
-      socket.emit('init'); startLatencyPing();
+      socket.emit('init',{serverId:curServer}); startLatencyPing();
       // Server-side ptys die when the socket drops — re-attach any open panes.
       screenPanes.forEach((p,k)=>{
-        socket.emit('screen:join',{sessionName:k,cols:p.term.cols||80,rows:p.term.rows||24});
+        socket.emit('screen:join',{serverId:route.server||curServer,sessionName:k,cols:p.term.cols||80,rows:p.term.rows||24});
       });
     });
     socket.on('disconnect',()=>{
@@ -1077,7 +1212,7 @@
     });
     socket.on('reconnect',()=>{
       $('reconnectBanner').classList.remove('visible');
-      socket.emit('init'); showToast('reconnected');
+      socket.emit('init',{serverId:curServer}); showToast('reconnected');
     });
     socket.on('connect_error',err=>{
       if(err.message==='Unauthorized'){
@@ -1085,24 +1220,27 @@
         $('authError').textContent='Invalid token';
       }
     });
-    socket.on('status',({connected:c,message,agentType,agentAvail,claudeAvail})=>{
+    socket.on('status',({serverId,connected:c,message,agentType,agentAvail,claudeAvail})=>{
+      if(serverId&&serverId!==curServer)return;
       connected=c; hideSplash();
       setStatus(c?'on':'err',c?message:'offline');
       if(c){
         $('sendBtn').disabled=false;
         if(agentType)setAgentUI(agentType);
-        if(agentAvail===false)$('opt-agent').disabled=true;
-        if(claudeAvail===false)$('opt-claude').disabled=true;
+        $('opt-agent').disabled=agentAvail===false;
+        $('opt-claude').disabled=claudeAvail===false;
         startScreenRefresh();
         applyRoute();           // open any panes the URL asks for (deep link / reload)
-        loadScreenSessions();
+        if(route.view==='screens'||route.view==='term')loadScreenSessions();
       }
     });
-    socket.on('agentSwitched',({agentType})=>{
+    socket.on('agentSwitched',({serverId,agentType})=>{
+      if(serverId&&serverId!==curServer)return;
       activeAgent=agentType; setAgentUI(agentType);
       showToast('switched to '+(agentType==='claude'?'Claude':'Cursor'));
     });
-    socket.on('response',({type,content})=>{
+    socket.on('response',({serverId,type,content})=>{
+      if(serverId&&serverId!==curServer)return;
       if(type==='thinking'){
         lastThinkingContent=content||'';
         if(thinkingEl){
@@ -1119,18 +1257,48 @@
         if(finalContent){addMsg(type,finalContent);haptic('light');playNotif();}
       }
     });
-    socket.on('queue',q=>{
+    socket.on('queue',({serverId,queue:q})=>{
+      if(serverId&&serverId!==curServer)return;
       const b=$('queueBanner');
       if(q.length>0){b.classList.add('on');$('queueCount').textContent=q.length;}
       else b.classList.remove('on');
     });
-    socket.on('screen:list',({sessions})=>{ renderScreenList(sessions); });
-    socket.on('screen:output',({sessionName,data})=>{
+    socket.on('screen:list',({serverId,sessions})=>{
+      if(serverId&&serverId!==(route.server||curServer))return;
+      renderScreenList(sessions);
+    });
+    socket.on('screen:output',({serverId,sessionName,data})=>{
+      if(serverId&&route.server&&serverId!==route.server)return;
       const p=sessionName?screenPanes.get(sessionName):null;
       if(p){ p.term.write(data); }
       else if(!sessionName&&screenPanes.size===1){ screenPanes.values().next().value.term.write(data); } // back-compat
     });
-    socket.on('screen:exit',({sessionName})=>{ handleScreenExit(sessionName); });
+    socket.on('screen:exit',({serverId,sessionName,error})=>{
+      if(serverId&&route.server&&serverId!==route.server)return;
+      if(error)showToast(error);
+      handleScreenExit(sessionName);
+    });
+    // ── Dashboard events ───────────────────────────
+    socket.on('servers:list',({servers:list,keys})=>{
+      servers=list.filter(s=>!s.local); sshKeys=keys||[];
+      // A remembered server that was removed falls back to this box.
+      if(curServer!=='local'&&!servers.some(s=>s.id===curServer)){
+        curServer='local'; localStorage.setItem('termi_server','local');
+      }
+      renderServerDash();
+    });
+    socket.on('servers:status',(st)=>{
+      serverStatus[st.id]=st;
+      updateServerRow(st.id);
+    });
+    socket.on('servers:error',({message})=>{
+      const err=$('sfError');
+      if(!$('serverForm').hidden){ err.textContent=message; $('sfSave').disabled=false; }
+      showToast(message);
+    });
+    socket.on('servers:test',(res)=>{
+      showToast(res.online?('reachable — '+(res.screens||0)+' screens'):('unreachable: '+(res.error||'ssh failed')));
+    });
   }
 
   // ── Latency ─────────────────────────────────────────
@@ -1145,56 +1313,91 @@
     });
   }
   function showLatency(){haptic('light');measureLatency();}
-  function resetSession(){if(!socket)return;haptic('medium');socket.emit('reset');showToast('session reset');}
+  function resetSession(){if(!socket)return;haptic('medium');socket.emit('reset',{serverId:curServer});showToast('session reset');}
 
   // ── Router ──────────────────────────────────────────
   function parseHash(){
     const raw=(location.hash||'').replace(/^#\/?/,'');
     const parts=raw.split('/');
     const dec=s=>(s||'').split(',').map(decodeURIComponent).filter(Boolean).slice(0,MAX_PANES);
-    if(parts[0]==='chat') return {view:'chat',sessions:[],add:false};
-    if(parts[0]==='screen'&&parts[1]) return {view:'term',sessions:dec(parts[1]),add:false};
-    if(parts[0]==='screens'&&parts[1]==='add'&&parts[2]) return {view:'screens',sessions:dec(parts[2]),add:true};
-    return {view:'screens',sessions:[],add:false};
+    // Legacy (pre-dashboard) routes → local server
+    if(parts[0]==='chat') return {view:'chat',server:'local',sessions:[],add:false};
+    if(parts[0]==='screen'&&parts[1]) return {view:'term',server:'local',sessions:dec(parts[1]),add:false};
+    if(parts[0]==='screens'&&parts[1]==='add'&&parts[2]) return {view:'screens',server:'local',sessions:dec(parts[2]),add:true};
+    if(parts[0]==='screens') return {view:'screens',server:'local',sessions:[],add:false};
+    if(parts[0]==='srv'&&parts[1]){
+      const srv=decodeURIComponent(parts[1]);
+      if(parts[2]==='chat') return {view:'chat',server:srv,sessions:[],add:false};
+      if(parts[2]==='screen'&&parts[3]) return {view:'term',server:srv,sessions:dec(parts[3]),add:false};
+      if(parts[2]==='screens'&&parts[3]==='add'&&parts[4]) return {view:'screens',server:srv,sessions:dec(parts[4]),add:true};
+      return {view:'screens',server:srv,sessions:[],add:false};
+    }
+    return {view:'servers',server:null,sessions:[],add:false};
   }
-  function termHash(list){ return '#/screen/'+list.map(encodeURIComponent).join(','); }
+  function srvHash(srv,rest){ return '#/srv/'+encodeURIComponent(srv)+'/'+rest; }
+  function termHash(list){ return srvHash(route.server||curServer,'screen/'+list.map(encodeURIComponent).join(',')); }
   function prettyName(fullName){ const i=fullName.indexOf('.'); return i>0?fullName.slice(i+1):fullName; }
+  function serverLabel(id){
+    const sid=id||curServer;
+    if(sid==='local')return 'this server';
+    const s=servers.find(x=>x.id===sid);
+    return s?s.name:sid;
+  }
 
   function applyRoute(){
+    const prevServer=route&&route.server;
     route=parseHash();
     if(route.view==='term'&&!route.sessions.length){
-      history.replaceState(null,'','#/screens');
+      history.replaceState(null,'',srvHash(route.server||'local','screens'));
       route=parseHash();
     }
     const r=route;
-    $('tab-screens').classList.toggle('active',r.view!=='chat');
+    if(r.server&&r.server!==curServer){ curServer=r.server; localStorage.setItem('termi_server',curServer); }
+
+    $('tab-servers').classList.toggle('active',r.view==='servers');
+    $('tab-screens').classList.toggle('active',r.view==='screens'||r.view==='term');
     $('tab-chat').classList.toggle('active',r.view==='chat');
+    $('tab-screens').setAttribute('href',srvHash(curServer,'screens'));
+    $('tab-chat').setAttribute('href',srvHash(curServer,'chat'));
+    $('view-servers').classList.toggle('active',r.view==='servers');
     $('view-screens').classList.toggle('active',r.view==='screens');
     $('view-term').classList.toggle('active',r.view==='term');
     $('view-chat').classList.toggle('active',r.view==='chat');
 
-    if(r.view==='chat'){
+    // Server scope changed → that server's chat + fresh session list
+    if(r.server&&prevServer!==r.server){
+      sessionCache=[]; listLoaded=false;
+      resetChatUI();
+      if(connected)socket.emit('init',{serverId:r.server});
+    }
+
+    if(r.view==='servers'){
       syncPanes([]);
-      document.title='termi — chat';
+      if(connected)socket.emit('servers:list');
+      document.title='termi — servers';
+    } else if(r.view==='chat'){
+      syncPanes([]);
+      document.title='termi — '+serverLabel()+' chat';
     } else if(r.view==='screens'){
       // In add-mode the open panes stay alive behind the list.
       syncPanes(r.add?r.sessions:[]);
       updateScreensChrome();
       loadScreenSessions();
-      document.title='termi — sessions';
+      document.title='termi — '+serverLabel();
     } else {
       $('screenBadge').classList.remove('on');
       syncPanes(r.sessions);
       document.title='termi — '+prettyName(r.sessions[0]);
     }
     updateAddPaneBtn();
+    if(r.server)$('termBackBtn').setAttribute('href',srvHash(r.server,'screens'));
     if(r.view!=='term')$('app').classList.remove('term-fs'); // full screen is terminal-only
     applyViewportHeight();
     if(r.view==='term'){ setTimeout(refitAllPanes,60); setTimeout(refitAllPanes,220); }
   }
 
   function updateScreensChrome(){
-    $('scrTitleText').textContent=route.add?'add split pane':'sessions';
+    $('scrTitleText').textContent=route.add?'add split pane':serverLabel();
     const back=$('backToPanes');
     back.hidden=!route.add;
     if(route.add)back.setAttribute('href',termHash(route.sessions));
@@ -1205,19 +1408,22 @@
     const b=$('addPaneBtn');
     const can=route.view==='term'&&route.sessions.length>0&&route.sessions.length<MAX_PANES;
     b.hidden=!can;
-    if(can)b.setAttribute('href','#/screens/add/'+route.sessions.map(encodeURIComponent).join(','));
+    if(can)b.setAttribute('href',srvHash(route.server,'screens/add/'+route.sessions.map(encodeURIComponent).join(',')));
   }
 
   // ── Session list ────────────────────────────────────
   function loadScreenSessions(){
     if(!socket||!connected)return;
     if(!listLoaded)$('screenSkeletons').hidden=false;
-    socket.emit('screen:list');
+    socket.emit('screen:list',{serverId:route.server||curServer});
   }
   function refreshScreens(){haptic('light');showToast('refreshing...');loadScreenSessions();}
   function startScreenRefresh(){
     stopScreenRefresh();
-    screenRefreshInterval=setInterval(()=>{ if(route.view!=='chat')loadScreenSessions(); },5000);
+    screenRefreshInterval=setInterval(()=>{
+      if(route.view==='servers')socket.emit('servers:list');
+      else if(route.view!=='chat')loadScreenSessions();
+    },5000);
   }
   function stopScreenRefresh(){if(screenRefreshInterval){clearInterval(screenRefreshInterval);screenRefreshInterval=null;}}
 
@@ -1300,6 +1506,150 @@
     if(location.hash===card.getAttribute('href'))setTimeout(applyRoute,0);
   });
 
+  // ── Servers dashboard ───────────────────────────────
+  function statusDotCls(id){
+    const st=serverStatus[id];
+    if(!st)return 'unk';
+    return st.online===true?'on':'off';
+  }
+
+  function buildServerRow(s){
+    const row=document.createElement('div');
+    row.className='srv-row'; row.dataset.server=s.id; row.setAttribute('role','listitem');
+    const isLocal=s.id==='local';
+    row.innerHTML=`<span class="srv-dot unk"></span>
+      <div class="srv-info">
+        <div class="srv-name"><span class="srv-name-text"></span><span class="srv-badge sb-local" ${isLocal?'':'hidden'}>local</span><span class="srv-badge sb-scr srv-scr" hidden></span><span class="srv-badge sb-off srv-off" hidden>offline</span></div>
+        <div class="srv-sub"></div>
+      </div>
+      <div class="srv-acts">
+        <a class="srv-open" href="${srvHash(s.id,'screens')}">Open</a>
+        <button type="button" class="srv-icon srv-edit" title="Edit server" aria-label="Edit ${s.name}" ${isLocal?'hidden':''}>&#9998;</button>
+        <button type="button" class="srv-icon del srv-del" title="Remove server" aria-label="Remove ${s.name}" ${isLocal?'hidden':''}>&times;</button>
+      </div>`;
+    row.querySelector('.srv-edit').addEventListener('click',()=>openServerForm(s.id));
+    row.querySelector('.srv-del').addEventListener('click',()=>deleteServer(s.id));
+    return row;
+  }
+
+  function updateServerRow(id){
+    const row=$('serverList').querySelector(`.srv-row[data-server="${cssEsc(id)}"]`);
+    if(!row)return;
+    const s=id==='local'?{name:'this server'}:servers.find(x=>x.id===id);
+    if(!s)return;
+    const st=serverStatus[id]||{};
+    row.querySelector('.srv-dot').className='srv-dot '+statusDotCls(id);
+    row.querySelector('.srv-name-text').textContent=s.name;
+    row.querySelector('.srv-sub').textContent=id==='local'
+      ?'this box — no SSH needed'
+      :`${s.user}@${s.host}${s.port&&s.port!==22?':'+s.port:''}`;
+    const scr=row.querySelector('.srv-scr');
+    const off=row.querySelector('.srv-off');
+    scr.hidden=!(st.online&&typeof st.screens==='number');
+    if(!scr.hidden)scr.textContent=st.screens+(st.screens===1?' screen':' screens');
+    off.hidden=st.online!==false;
+  }
+
+  // Keyed in-place rendering (same trick as the screen list) so the 5s
+  // dashboard refresh never swaps a row out from under a tap.
+  function renderServerDash(){
+    const list=$('serverList');
+    const all=[{id:'local',name:'this server',local:true},...servers];
+    const seen=new Set();
+    all.forEach(s=>{
+      seen.add(s.id);
+      let row=list.querySelector(`.srv-row[data-server="${cssEsc(s.id)}"]`);
+      if(!row){row=buildServerRow(s);list.appendChild(row);}
+      updateServerRow(s.id);
+    });
+    list.querySelectorAll('.srv-row[data-server]').forEach(r=>{ if(!seen.has(r.dataset.server))r.remove(); });
+    $('serverListEmpty').hidden=servers.length>0;
+    refreshKeySelect();
+  }
+
+  // ── Add / edit server form ──────────────────────────
+  function refreshKeySelect(){
+    const sel=$('sfKey');
+    const cur=sel.value;
+    sel.innerHTML='';
+    sshKeys.forEach(k=>{
+      const o=document.createElement('option');
+      o.value=k.id; o.textContent=k.name;
+      sel.appendChild(o);
+    });
+    const add=document.createElement('option');
+    add.value='__new__'; add.textContent='+ paste a new key...';
+    sel.appendChild(add);
+    if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
+    else sel.value=sshKeys.length?sshKeys[0].id:'__new__';
+    onKeySelect();
+  }
+
+  function onKeySelect(){
+    $('sfKeyText').hidden=$('sfKey').value!=='__new__';
+  }
+
+  function openServerForm(id){
+    editingServer=id||null;
+    const f=$('serverForm');
+    const s=id?servers.find(x=>x.id===id):null;
+    $('sfTitle').textContent=s?('Edit '+s.name):'Add server';
+    $('sfName').value=s?s.name:'';
+    $('sfHost').value=s?s.host:'';
+    $('sfUser').value=s?s.user:'root';
+    $('sfPort').value=s?(s.port||22):22;
+    $('sfError').textContent='';
+    $('sfKeyText').value='';
+    refreshKeySelect();
+    if(s&&s.keyId&&[...$('sfKey').options].some(o=>o.value===s.keyId))$('sfKey').value=s.keyId;
+    onKeySelect();
+    f.hidden=false; $('addServerBtn').hidden=true;
+    $('sfSave').disabled=false;
+    $('sfHost').focus();
+    haptic('light');
+  }
+
+  function closeServerForm(){
+    $('serverForm').hidden=true;
+    $('addServerBtn').hidden=false;
+    editingServer=null;
+  }
+
+  function saveServerForm(e){
+    e.preventDefault();
+    if(!socket||!connected){showToast('not connected');return;}
+    const err=$('sfError'); err.textContent='';
+    const payload={
+      name:$('sfName').value.trim()||$('sfHost').value.trim(),
+      host:$('sfHost').value.trim(),
+      user:$('sfUser').value.trim()||'root',
+      port:parseInt($('sfPort').value,10)||22,
+    };
+    const keySel=$('sfKey').value;
+    if(keySel==='__new__'){
+      const material=$('sfKeyText').value.trim();
+      if(!material){err.textContent='Paste a private key or pick a stored one.';return;}
+      payload.newKey={name:(payload.name||'key')+' key',privateKey:material};
+    } else {
+      payload.keyId=keySel;
+    }
+    $('sfSave').disabled=true;
+    if(editingServer)socket.emit('servers:update',{id:editingServer,...payload});
+    else socket.emit('servers:add',payload);
+    // servers:list broadcast confirms the save; errors reopen via servers:error
+    setTimeout(()=>{ if($('sfError').textContent==='')closeServerForm(); },600);
+    showToast(editingServer?'saving...':'adding server...');
+    haptic('medium');
+  }
+
+  function deleteServer(id){
+    const s=servers.find(x=>x.id===id);
+    if(!s)return;
+    if(!confirm('Remove "'+s.name+'" from termi?\n(The server itself is untouched.)'))return;
+    socket.emit('servers:remove',{id});
+    haptic('medium');
+  }
+
   // ── Terminal panes ──────────────────────────────────
   function syncPanes(desired){
     const want=new Set(desired);
@@ -1357,7 +1707,7 @@
         if(term.buffer.active.type!=='alternate'){
           term.scrollLines(lines);
         }else if(p&&p.copyMode){
-          if(socket)socket.emit('screen:input',{sessionName:fullName,
+          if(socket)socket.emit('screen:input',{serverId:p.serverId,sessionName:fullName,
             data:(lines>0?'\x1b[B':'\x1b[A').repeat(Math.min(Math.abs(lines),term.rows||24))});
         }else if(Date.now()-lastHint>3000){
           lastHint=Date.now();
@@ -1390,9 +1740,9 @@
       cursorBlink:true, cursorStyle:'block', fontSize:screenTermFontSize(screenPanes.size+1),
       fontFamily:'JetBrains Mono, SF Mono, monospace',
       theme:{
-        background:'#0b0b0f',foreground:'#e8e8ef',cursor:'#22dd88',
+        background:'#0a0a0c',foreground:'#e8e8ef',cursor:'#6e72f0',
         selectionBackground:'#6ba1ff44',
-        black:'#0b0b0f',red:'#ff6b6b',green:'#22dd88',yellow:'#ffb347',
+        black:'#0a0a0c',red:'#ff6b6b',green:'#22dd88',yellow:'#ffb347',
         blue:'#6ba1ff',magenta:'#c084fc',cyan:'#22d3ee',white:'#e8e8ef',
         brightBlack:'#555568',brightRed:'#ff8a80',brightGreen:'#69f0ae',
         brightYellow:'#ffd740',brightBlue:'#82b1ff',brightMagenta:'#ea80fc',
@@ -1406,23 +1756,24 @@
     // the visible input bar below is the intended typing target.
     const helper=pane.querySelector('.xterm-helper-textarea');
     if(helper)helper.setAttribute('aria-hidden','true');
+    const sid=route.server||curServer; // panes belong to the server they were opened on
     enableTouchScroll(term,pane.querySelector('.scr-pane-term'),fullName);
-    term.onData(d=>{const clean=stripMouseReports(d);if(socket&&clean)socket.emit('screen:input',{sessionName:fullName,data:clean});});
-    screenPanes.set(fullName,{term,fit,paneEl:pane,name:meta.name,status:meta.status});
+    term.onData(d=>{const clean=stripMouseReports(d);if(socket&&clean)socket.emit('screen:input',{serverId:sid,sessionName:fullName,data:clean});});
+    screenPanes.set(fullName,{term,fit,paneEl:pane,name:meta.name,status:meta.status,serverId:sid});
     pane.addEventListener('mousedown',()=>focusPane(fullName));
     pane.addEventListener('touchstart',()=>focusPane(fullName),{passive:true});
     pane.querySelector('.scr-pane-close').addEventListener('click',e=>{
       e.stopPropagation(); e.preventDefault(); closePaneNav(fullName);
     });
     updatePaneGrid();
-    socket.emit('screen:join',{sessionName:fullName,cols:term.cols||80,rows:term.rows||24});
-    const sync=()=>{try{fit.fit();socket.emit('screen:resize',{sessionName:fullName,cols:term.cols,rows:term.rows});}catch(_){}};
+    socket.emit('screen:join',{serverId:sid,sessionName:fullName,cols:term.cols||80,rows:term.rows||24});
+    const sync=()=>{try{fit.fit();socket.emit('screen:resize',{serverId:sid,sessionName:fullName,cols:term.cols,rows:term.rows});}catch(_){}};
     setTimeout(sync,120); setTimeout(sync,320);
   }
 
   function removePane(fullName,notify){
     const p=screenPanes.get(fullName); if(!p)return;
-    if(notify&&socket)socket.emit('screen:leave',{sessionName:fullName});
+    if(notify&&socket)socket.emit('screen:leave',{serverId:p.serverId,sessionName:fullName});
     try{p.term.dispose();}catch(_){}
     p.paneEl.remove();
     screenPanes.delete(fullName);
@@ -1434,7 +1785,7 @@
   function closePaneNav(fullName){
     haptic('light');
     const remaining=route.sessions.filter(s=>s!==fullName);
-    location.hash=remaining.length?termHash(remaining):'#/screens';
+    location.hash=remaining.length?termHash(remaining):srvHash(route.server||curServer,'screens');
   }
 
   function handleScreenExit(sessionName){
@@ -1442,9 +1793,10 @@
     removePane(sessionName,false);
     showToast('session ended: '+prettyName(sessionName));
     const remaining=route.sessions.filter(s=>s!==sessionName);
+    const screensHash=srvHash(route.server||curServer,'screens');
     let target=null;
-    if(route.view==='term')target=remaining.length?termHash(remaining):'#/screens';
-    else if(route.add)target=remaining.length?'#/screens/add/'+remaining.map(encodeURIComponent).join(','):'#/screens';
+    if(route.view==='term')target=remaining.length?termHash(remaining):screensHash;
+    else if(route.add)target=remaining.length?srvHash(route.server,'screens/add/'+remaining.map(encodeURIComponent).join(',')):screensHash;
     if(target){ history.replaceState(null,'',target); applyRoute(); }
     loadScreenSessions();
   }
@@ -1526,7 +1878,7 @@
       try{
         if(p.term.options.fontSize!==fs)p.term.options.fontSize=fs;
         p.fit.fit();
-        if(socket)socket.emit('screen:resize',{sessionName:k,cols:p.term.cols,rows:p.term.rows});
+        if(socket)socket.emit('screen:resize',{serverId:p.serverId,sessionName:k,cols:p.term.cols,rows:p.term.rows});
       }catch(_){}
     });
     updateTermBar();
@@ -1557,7 +1909,8 @@
   function sendScreenSeq(seq){
     if(!socket||!focusedScreen)return;
     haptic('light');
-    socket.emit('screen:input',{sessionName:focusedScreen,data:seq});
+    const p=screenPanes.get(focusedScreen);
+    socket.emit('screen:input',{serverId:p?p.serverId:(route.server||curServer),sessionName:focusedScreen,data:seq});
   }
 
   function screenFocusInput(){
@@ -1630,7 +1983,7 @@
   document.addEventListener('touchend',e=>{
     if(route.view!=='term')return;
     const dx=e.changedTouches[0].clientX-swipeStartX, dy=Math.abs(e.changedTouches[0].clientY-swipeStartY);
-    if(swipeStartX<30&&dx>80&&dy<80)location.hash='#/screens';
+    if(swipeStartX<30&&dx>80&&dy<80)location.hash=srvHash(route.server||curServer,'screens');
   },{passive:true});
 
   // Pull to refresh on the session list
@@ -1747,20 +2100,33 @@
     }
   }
 
-  // ── History ─────────────────────────────────────────
+  // ── History (kept per server) ───────────────────────
+  function histKey(){
+    // The local server keeps the pre-dashboard key so old history survives.
+    return curServer==='local'?'termi_history':'termi_history_'+curServer;
+  }
   function saveMessage(type,content){
     if(type==='thinking')return;
     try{
-      const h=JSON.parse(localStorage.getItem('termi_history')||'[]');
+      const h=JSON.parse(localStorage.getItem(histKey())||'[]');
       h.push({type,content,ts:Date.now()});
       if(h.length>200)h.splice(0,h.length-200);
-      localStorage.setItem('termi_history',JSON.stringify(h));
+      localStorage.setItem(histKey(),JSON.stringify(h));
     }catch(_){}
+  }
+
+  // Swap the chat pane to the current server's conversation.
+  function resetChatUI(){
+    if(thinkingEl){thinkingEl=null;}
+    lastThinkingContent='';
+    setBusy(false);
+    showWelcome();
+    loadHistory();
   }
 
   function loadHistory(){
     try{
-      const h=JSON.parse(localStorage.getItem('termi_history')||'[]');
+      const h=JSON.parse(localStorage.getItem(histKey())||'[]');
       const recent=h.slice(-50);
       if(!recent.length)return;
       hideWelcome();
@@ -1799,7 +2165,7 @@
   }
 
   function clearHistory(){
-    localStorage.removeItem('termi_history');
+    localStorage.removeItem(histKey());
     $('messages').innerHTML='';
     showWelcome(); showToast('history cleared'); haptic('light');
   }
@@ -1832,12 +2198,12 @@
     haptic('light'); addMsg('you',msg);
     el.value=''; resizeTA(el);
     setBusy(true);
-    socket.emit('chat',{message:msg});
+    socket.emit('chat',{message:msg,serverId:curServer});
   }
   function quick(cmd){haptic('light');$('input').value=cmd;send();}
 
   // ── Agent switch ────────────────────────────────────
-  function switchAgent(type){if(!socket||!connected||type===activeAgent)return;haptic('medium');socket.emit('setAgent',{type});}
+  function switchAgent(type){if(!socket||!connected||type===activeAgent)return;haptic('medium');socket.emit('setAgent',{type,serverId:curServer});}
   function setAgentUI(type){activeAgent=type;document.querySelectorAll('.agent-btn').forEach(b=>b.classList.remove('active'));$('opt-'+type).classList.add('active');}
 
   // ── Utils ───────────────────────────────────────────
@@ -1938,6 +2304,7 @@
 
   // Theme
   const themes={
+    indigo:{accent:'#6e72f0',accentDark:'#5a5ed6',dim:'rgba(110,114,240,0.08)',mid:'rgba(110,114,240,0.15)',glow:'rgba(110,114,240,0.25)'},
     green: {accent:'#22dd88',accentDark:'#1aaf6a',dim:'rgba(34,221,136,0.08)',mid:'rgba(34,221,136,0.15)',glow:'rgba(34,221,136,0.25)'},
     blue:  {accent:'#6ba1ff',accentDark:'#3b82f6',dim:'rgba(107,161,255,0.08)',mid:'rgba(107,161,255,0.15)',glow:'rgba(107,161,255,0.25)'},
     amber: {accent:'#ffb347',accentDark:'#f59e0b',dim:'rgba(255,179,71,0.08)',mid:'rgba(255,179,71,0.15)',glow:'rgba(255,179,71,0.25)'},
@@ -1954,7 +2321,7 @@
     });
     document.querySelectorAll('.theme-dot').forEach(d=>d.classList.remove('active'));
     const dots=document.querySelectorAll('.theme-dot');
-    const idx={green:0,blue:1,amber:2,purple:3}[name];
+    const idx={indigo:0,green:1,blue:2,amber:3,purple:4}[name];
     if(dots[idx])dots[idx].classList.add('active');
     haptic('light'); showToast(name+' theme');
   }
@@ -1996,7 +2363,7 @@
       if(now-lastTap<300&&lastInputMsg&&connected&&!agentBusy){
         haptic('medium');
         addMsg('you',lastInputMsg);
-        socket.emit('chat',{message:lastInputMsg});
+        socket.emit('chat',{message:lastInputMsg,serverId:curServer});
         showToast('retrying...');
       }
       lastTap=now;
@@ -2014,7 +2381,7 @@
 
   // ── Init ────────────────────────────────────────────
   window.addEventListener('load',()=>{
-    if(!location.hash||location.hash==='#')history.replaceState(null,'','#/screens');
+    if(!location.hash||location.hash==='#')history.replaceState(null,'','#/servers');
     applyRoute();
     window.addEventListener('hashchange',applyRoute);
     const saved=localStorage.getItem('termi_token');
@@ -2026,7 +2393,7 @@
     setupScrollLock();
     setupLongPress();
     setupDoubleTapRetry();
-    if(currentTheme!=='green')setTheme(currentTheme);
+    if(currentTheme!=='indigo')setTheme(currentTheme);
     setTimeout(()=>{if(!connected&&$('splash').style.display!=='none'){hideSplash();if(!token)$('auth').style.display='flex';}},5000);
   });
 

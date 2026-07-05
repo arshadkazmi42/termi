@@ -7,6 +7,9 @@ const fs = require('fs');
 const util = require('util');
 const os = require('os');
 
+const registry = require('./lib/registry');
+const remote = require('./lib/remote');
+
 const execAsync = util.promisify(exec);
 
 // ── Resolve agent binary path ─────────────────────────────
@@ -42,68 +45,79 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN || 'changeme';
 const PORT = process.env.PORT || 3619;
 const WORK_DIR = process.env.WORK_DIR || '/root/workspace';
 const CLAUDE_USER = process.env.CLAUDE_USER || 'termi';
+const LOCAL_ID = 'local';
 
-let hasSession = false;
-let agentRunning = false;
-let agentType = process.env.AGENT_TYPE || 'agent'; // 'agent' or 'claude'
+registry.setSecret(AUTH_TOKEN);
 
-// Store last response server-side so mobile can get it on reconnect
-let lastResponse = null;
-let pendingOutput = '';
+// ── Per-server chat state ─────────────────────────────
+// Each target (local box or SSH server) gets its own queue + session.
+const chats = new Map(); // serverId → state
 
-// ── Queue ─────────────────────────────────────────────
-let queue = [];
-
-function emitQueue() {
-  io.emit('queue', queue);
+function chatState(serverId) {
+  let st = chats.get(serverId);
+  if (!st) {
+    st = {
+      queue: [], hasSession: false, agentRunning: false,
+      agentType: serverId === LOCAL_ID ? (process.env.AGENT_TYPE || 'agent') : 'claude',
+      lastResponse: null, pendingOutput: '',
+    };
+    chats.set(serverId, st);
+  }
+  return st;
 }
 
-async function processQueue() {
-  if (agentRunning || queue.length === 0) return;
+function emitQueue(serverId) {
+  io.emit('queue', { serverId, queue: chatState(serverId).queue });
+}
 
-  const next = queue.shift();
-  emitQueue();
+async function processQueue(serverId) {
+  const st = chatState(serverId);
+  if (st.agentRunning || st.queue.length === 0) return;
 
-  agentRunning = true;
-  pendingOutput = '';
-  lastResponse = null;
+  const next = st.queue.shift();
+  emitQueue(serverId);
 
-  io.emit('response', { type: 'thinking', content: `Running: ${next.message}` });
+  st.agentRunning = true;
+  st.pendingOutput = '';
+  st.lastResponse = null;
+
+  io.emit('response', { serverId, type: 'thinking', content: `Running: ${next.message}` });
 
   // Keepalive — emit heartbeat every 20s so mobile knows agent is still working
   const keepalive = setInterval(() => {
-    if (agentRunning) {
-      io.emit('keepalive', { running: true });
-      console.log('[keepalive] agent still running, output length:', pendingOutput.length);
+    if (st.agentRunning) {
+      io.emit('keepalive', { serverId, running: true });
+      console.log('[keepalive]', serverId, 'agent still running, output length:', st.pendingOutput.length);
     }
   }, 20000);
 
   try {
-    const output = await runActive(next.message, (chunk) => {
-      io.emit('response', { type: 'thinking', content: chunk });
+    const output = await runActive(serverId, next.message, (chunk) => {
+      st.pendingOutput = chunk;
+      io.emit('response', { serverId, type: 'thinking', content: chunk });
     });
 
     clearInterval(keepalive);
-    hasSession = true;
-    agentRunning = false;
+    st.hasSession = true;
+    st.agentRunning = false;
 
-    lastResponse = { type: 'agent', content: output };
-    pendingOutput = '';
+    st.lastResponse = { serverId, type: 'agent', content: output };
+    st.pendingOutput = '';
 
-    console.log('[agent] completed, emitting final response, length:', output.length);
-    io.emit('response', lastResponse);
+    console.log('[agent]', serverId, 'completed, emitting final response, length:', output.length);
+    io.emit('response', st.lastResponse);
 
   } catch (err) {
     clearInterval(keepalive);
-    agentRunning = false;
-    lastResponse = { type: 'error', content: err.message };
-    io.emit('response', lastResponse);
+    st.agentRunning = false;
+    st.lastResponse = { serverId, type: 'error', content: err.message };
+    io.emit('response', st.lastResponse);
   }
 
-  processQueue();
+  processQueue(serverId);
 }
 
-// ── Agent ─────────────────────────────────────────────
+// ── Agent runners ─────────────────────────────────────
 function spawnRunner(message, onChunk, bin, args) {
   return new Promise((resolve, reject) => {
     let output = '';
@@ -134,9 +148,7 @@ function spawnRunner(message, onChunk, bin, args) {
     }
 
     proc.stdout.on('data', (data) => {
-      const chunk = data.toString();
-      output += chunk;
-      pendingOutput = output;
+      output += data.toString();
       onChunk(output);
     });
 
@@ -162,9 +174,9 @@ function spawnRunner(message, onChunk, bin, args) {
   });
 }
 
-function runAgent(message, onChunk) {
+function runAgent(st, message, onChunk) {
   const args = ['--print', '--trust', '--yolo'];
-  if (hasSession) args.push('--continue');
+  if (st.hasSession) args.push('--continue');
   return spawnRunner(message, onChunk, 'agent', args);
 }
 
@@ -178,13 +190,13 @@ function getClaudeUid() {
   }
 }
 
-function runClaudeCode(message, onChunk) {
+function runClaudeCode(st, message, onChunk) {
   return new Promise((resolve, reject) => {
     let output = '';
     let error = '';
 
     const args = ['--print', '--dangerously-skip-permissions'];
-    if (hasSession) args.push('--continue');
+    if (st.hasSession) args.push('--continue');
     args.push(message);
 
     // Only switch user if running as root and CLAUDE_USER is different
@@ -205,9 +217,7 @@ function runClaudeCode(message, onChunk) {
     proc.stdin.end();
 
     proc.stdout.on('data', (data) => {
-      const chunk = data.toString();
-      output += chunk;
-      pendingOutput = output;
+      output += data.toString();
       onChunk(output);
     });
 
@@ -217,7 +227,6 @@ function runClaudeCode(message, onChunk) {
 
     proc.on('close', (code) => {
       console.log('[claude] closed, code:', code, 'stdout:', output.length, 'stderr:', error.length);
-      agentRunning = false;
       if (output) resolve(output);
       else if (error) resolve(error);
       else resolve('Claude completed with no output.');
@@ -225,14 +234,26 @@ function runClaudeCode(message, onChunk) {
 
     proc.on('error', (err) => {
       console.log('[claude] error:', err.message);
-      agentRunning = false;
       reject(err);
     });
   });
 }
 
-function runActive(message, onChunk) {
-  return agentType === 'claude' ? runClaudeCode(message, onChunk) : runAgent(message, onChunk);
+// Remote agents run over SSH; the message travels base64-encoded via stdin
+// so no shell-quoting of user text is ever needed.
+function runRemoteAgent(serverId, st, message, onChunk) {
+  const b64 = Buffer.from(message, 'utf8').toString('base64');
+  const cont = st.hasSession ? ' --continue' : '';
+  const cmd = st.agentType === 'claude'
+    ? `echo ${b64} | base64 -d | claude --print --dangerously-skip-permissions${cont}`
+    : `echo ${b64} | base64 -d | agent --print --trust --yolo${cont}`;
+  return remote.streamOnServer(serverId, cmd, onChunk);
+}
+
+function runActive(serverId, message, onChunk) {
+  const st = chatState(serverId);
+  if (serverId !== LOCAL_ID) return runRemoteAgent(serverId, st, message, onChunk);
+  return st.agentType === 'claude' ? runClaudeCode(st, message, onChunk) : runAgent(st, message, onChunk);
 }
 
 async function runCommand(command) {
@@ -248,13 +269,21 @@ async function runCommand(command) {
   }
 }
 
-// ── Screen Session Management (node-pty + screen -x) ─────
+// ── Screen Session Management ─────────────────────────
+// Local sessions attach via node-pty; remote ones via an SSH PTY channel.
+// Both are wrapped in the same handle shape (write/resize/kill/onData/onExit).
 const pty = require('node-pty');
-const screenPtys = new Map(); // key: `${socketId}:${sessionName}` → { pty, sessionName }
+const screenPtys = new Map(); // key: `${socketId}:${serverId}:${sessionName}` → { handle, sessionName }
 
-async function listScreenSessions() {
+const SAFE_SESSION = /^[\w.\-]+$/;
+
+async function listScreenSessions(serverId = LOCAL_ID) {
   try {
-    const { stdout } = await execAsync('screen -ls', { timeout: 5000 });
+    if (serverId === LOCAL_ID) {
+      const { stdout } = await execAsync('screen -ls', { timeout: 5000 });
+      return parseScreenLs(stdout);
+    }
+    const { stdout } = await remote.execOnServer(serverId, 'screen -ls', { timeout: 10000 });
     return parseScreenLs(stdout);
   } catch (err) {
     if (err.stdout) return parseScreenLs(err.stdout);
@@ -280,12 +309,7 @@ function parseScreenLs(output) {
   return sessions;
 }
 
-function attachScreen(socket, sessionName, cols, rows) {
-  const key = `${socket.id}:${sessionName}`;
-  detachScreen(socket, sessionName);
-
-  console.log('[screen] attaching via node-pty:', sessionName, `${cols}x${rows}`);
-
+function openLocalPty(sessionName, cols, rows) {
   const term = pty.spawn('screen', ['-x', sessionName], {
     name: 'xterm-256color',
     cols: cols || 80,
@@ -293,28 +317,57 @@ function attachScreen(socket, sessionName, cols, rows) {
     cwd: process.env.HOME,
     env: process.env,
   });
-
-  term.onData((data) => {
-    socket.emit('screen:output', { sessionName, data });
-  });
-
-  term.onExit(({ exitCode }) => {
-    console.log('[screen] pty exited:', sessionName, 'code:', exitCode);
-    screenPtys.delete(key);
-    socket.emit('screen:exit', { sessionName, exitCode });
-  });
-
-  screenPtys.set(key, { pty: term, sessionName });
+  return {
+    write: (d) => term.write(d),
+    resize: (c, r) => { try { term.resize(c, r); } catch (_) {} },
+    kill: () => { try { term.kill(); } catch (_) {} },
+    onData: (fn) => term.onData(fn),
+    onExit: (fn) => term.onExit(fn),
+  };
 }
 
-function detachScreen(socket, sessionName) {
-  const key = `${socket.id}:${sessionName}`;
+async function attachScreen(socket, serverId, sessionName, cols, rows) {
+  if (!SAFE_SESSION.test(sessionName)) {
+    socket.emit('screen:exit', { serverId, sessionName, exitCode: -1, error: 'Invalid session name' });
+    return;
+  }
+  const key = `${socket.id}:${serverId}:${sessionName}`;
+  detachScreen(socket, serverId, sessionName);
+
+  console.log('[screen] attaching:', serverId, sessionName, `${cols}x${rows}`);
+
+  let handle;
+  try {
+    handle = serverId === LOCAL_ID
+      ? openLocalPty(sessionName, cols, rows)
+      : await remote.openRemotePty(serverId, `screen -x ${sessionName}`, { cols: cols || 80, rows: rows || 24 });
+  } catch (err) {
+    console.log('[screen] attach failed:', serverId, sessionName, err.message);
+    socket.emit('screen:exit', { serverId, sessionName, exitCode: -1, error: err.message });
+    return;
+  }
+
+  handle.onData((data) => {
+    socket.emit('screen:output', { serverId, sessionName, data });
+  });
+
+  handle.onExit(({ exitCode }) => {
+    console.log('[screen] pty exited:', serverId, sessionName, 'code:', exitCode);
+    screenPtys.delete(key);
+    socket.emit('screen:exit', { serverId, sessionName, exitCode });
+  });
+
+  screenPtys.set(key, { handle, sessionName });
+}
+
+function detachScreen(socket, serverId, sessionName) {
+  const key = `${socket.id}:${serverId}:${sessionName}`;
   const entry = screenPtys.get(key);
   if (entry) {
     // Send detach key (Ctrl-A d) to cleanly leave without killing session
-    entry.pty.write('\x01d');
+    entry.handle.write('\x01d');
     setTimeout(() => {
-      try { entry.pty.kill(); } catch (_) {}
+      try { entry.handle.kill(); } catch (_) {}
     }, 500);
     screenPtys.delete(key);
   }
@@ -323,31 +376,71 @@ function detachScreen(socket, sessionName) {
 function detachAllScreens(socketId) {
   for (const [key, entry] of screenPtys.entries()) {
     if (key.startsWith(`${socketId}:`)) {
-      entry.pty.write('\x01d');
+      entry.handle.write('\x01d');
       setTimeout(() => {
-        try { entry.pty.kill(); } catch (_) {}
+        try { entry.handle.kill(); } catch (_) {}
       }, 500);
       screenPtys.delete(key);
     }
   }
 }
 
-function sendScreenInput(socket, sessionName, data) {
-  const key = `${socket.id}:${sessionName}`;
-  const entry = screenPtys.get(key);
+function sendScreenInput(socket, serverId, sessionName, data) {
+  const entry = screenPtys.get(`${socket.id}:${serverId}:${sessionName}`);
   if (entry) {
-    entry.pty.write(data);
+    entry.handle.write(data);
     return true;
   }
   return false;
 }
 
-function resizeScreenPty(socket, sessionName, cols, rows) {
-  const key = `${socket.id}:${sessionName}`;
-  const entry = screenPtys.get(key);
-  if (entry) {
-    try { entry.pty.resize(cols, rows); } catch (_) {}
+function resizeScreenPty(socket, serverId, sessionName, cols, rows) {
+  const entry = screenPtys.get(`${socket.id}:${serverId}:${sessionName}`);
+  if (entry) entry.handle.resize(cols, rows);
+}
+
+// ── Server probing (dashboard status dots) ────────────
+const probeCache = new Map(); // serverId → { t, result }
+const PROBE_TTL = 20000;
+
+async function probeAndEmit(serverId, force) {
+  const cached = probeCache.get(serverId);
+  if (!force && cached && Date.now() - cached.t < PROBE_TTL) {
+    io.emit('servers:status', { id: serverId, ...cached.result });
+    return cached.result;
   }
+  let result;
+  if (serverId === LOCAL_ID) {
+    const sessions = await listScreenSessions(LOCAL_ID);
+    const [agentAvail, claudeAvail] = await Promise.all([
+      execAsync('which agent', { env: AGENT_ENV }).then(() => true).catch(() => false),
+      execAsync('which claude', { env: AGENT_ENV }).then(() => true).catch(() => false),
+    ]);
+    result = { online: true, hasScreen: true, hasClaude: claudeAvail, hasAgent: agentAvail, screens: sessions.length };
+  } else {
+    const probe = await remote.probeServer(serverId);
+    result = {
+      online: probe.online,
+      hasScreen: !!probe.hasScreen,
+      hasClaude: !!probe.hasClaude,
+      hasAgent: !!probe.hasAgent,
+      screens: probe.screenLs ? parseScreenLs(probe.screenLs).length : 0,
+      error: probe.error,
+    };
+  }
+  probeCache.set(serverId, { t: Date.now(), result });
+  io.emit('servers:status', { id: serverId, ...result });
+  return result;
+}
+
+function serverListPayload() {
+  return {
+    servers: [
+      { id: LOCAL_ID, name: 'this server', host: os.hostname(), port: null, user: null, local: true },
+      ...registry.listServers(),
+    ],
+    keys: registry.listKeys(),
+  };
 }
 
 // ── Socket ────────────────────────────────────────────
@@ -360,130 +453,211 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   console.log('[socket] connected:', socket.id, 'transport:', socket.conn.transport.name);
 
-  socket.on('init', async () => {
-    // Check availability of both CLIs
-    const [agentAvail, claudeAvail] = await Promise.all([
-      execAsync('which agent').then(() => true).catch(() => false),
-      execAsync('which claude').then(() => true).catch(() => false),
-    ]);
+  socket.on('init', async (payload) => {
+    const serverId = (payload && payload.serverId) || LOCAL_ID;
+    const st = chatState(serverId);
 
+    let agentAvail = false, claudeAvail = false, online = true;
+    try {
+      const probe = await probeAndEmit(serverId);
+      agentAvail = !!probe.hasAgent;
+      claudeAvail = !!probe.hasClaude;
+      online = !!probe.online;
+    } catch (_) {}
+
+    if (!online) {
+      socket.emit('status', { serverId, connected: false, message: 'Server unreachable over SSH.' });
+      return;
+    }
     if (!agentAvail && !claudeAvail) {
-      socket.emit('status', { connected: false, message: 'No agent CLI found in PATH.' });
+      socket.emit('status', { serverId, connected: true, agentType: st.agentType, agentAvail, claudeAvail, message: 'No agent CLI found on this server.' });
       return;
     }
 
     // If current agentType isn't available, fall back to what is
-    if (agentType === 'agent' && !agentAvail && claudeAvail) agentType = 'claude';
-    if (agentType === 'claude' && !claudeAvail && agentAvail) agentType = 'agent';
+    if (st.agentType === 'agent' && !agentAvail && claudeAvail) st.agentType = 'claude';
+    if (st.agentType === 'claude' && !claudeAvail && agentAvail) st.agentType = 'agent';
 
     // If agent is currently running — send current output so mobile catches up
-    if (agentRunning && pendingOutput) {
-      socket.emit('response', { type: 'thinking', content: pendingOutput });
+    if (st.agentRunning && st.pendingOutput) {
+      socket.emit('response', { serverId, type: 'thinking', content: st.pendingOutput });
     }
 
     // If we have a completed response the client may have missed — resend it
-    if (lastResponse && !agentRunning) {
-      console.log('[init] resending lastResponse to', socket.id);
-      socket.emit('response', lastResponse);
+    if (st.lastResponse && !st.agentRunning) {
+      console.log('[init] resending lastResponse to', socket.id, 'for', serverId);
+      socket.emit('response', st.lastResponse);
     }
 
-    socket.emit('queue', queue);
+    socket.emit('queue', { serverId, queue: st.queue });
 
     socket.emit('status', {
+      serverId,
       connected: true,
-      agentType,
+      agentType: st.agentType,
       agentAvail,
       claudeAvail,
-      message: agentRunning
+      message: st.agentRunning
         ? 'Agent is busy — reconnected, catching up...'
-        : hasSession
+        : st.hasSession
           ? 'Reconnected — session context intact'
-          : `Ready — ${WORK_DIR}`
+          : serverId === LOCAL_ID ? `Ready — ${WORK_DIR}` : 'Ready'
     });
   });
 
-  socket.on('setAgent', ({ type }) => {
+  socket.on('setAgent', ({ type, serverId = LOCAL_ID }) => {
     if (!['agent', 'claude'].includes(type)) return;
-    if (agentRunning) {
-      socket.emit('response', { type: 'error', content: 'Cannot switch agents while one is running.' });
+    const st = chatState(serverId);
+    if (st.agentRunning) {
+      socket.emit('response', { serverId, type: 'error', content: 'Cannot switch agents while one is running.' });
       return;
     }
-    agentType = type;
-    hasSession = false;
-    lastResponse = null;
-    pendingOutput = '';
-    socket.emit('agentSwitched', { agentType });
-    socket.emit('response', { type: 'system', content: `Switched to ${type === 'claude' ? 'Claude Code' : 'Cursor Agent'} — session reset.` });
+    st.agentType = type;
+    st.hasSession = false;
+    st.lastResponse = null;
+    st.pendingOutput = '';
+    socket.emit('agentSwitched', { serverId, agentType: st.agentType });
+    socket.emit('response', { serverId, type: 'system', content: `Switched to ${type === 'claude' ? 'Claude Code' : 'Cursor Agent'} — session reset.` });
   });
 
-  socket.on('chat', ({ message }) => {
-    const item = { id: Date.now(), message };
-    queue.push(item);
-    emitQueue();
-    processQueue();
+  socket.on('chat', ({ message, serverId = LOCAL_ID }) => {
+    const st = chatState(serverId);
+    st.queue.push({ id: Date.now(), message });
+    emitQueue(serverId);
+    processQueue(serverId);
   });
 
-  socket.on('queue:remove', ({ id }) => {
-    queue = queue.filter(i => i.id !== id);
-    emitQueue();
+  socket.on('queue:remove', ({ id, serverId = LOCAL_ID }) => {
+    const st = chatState(serverId);
+    st.queue = st.queue.filter(i => i.id !== id);
+    emitQueue(serverId);
   });
 
-  socket.on('queue:move', ({ id, direction }) => {
-    const idx = queue.findIndex(i => i.id === id);
+  socket.on('queue:move', ({ id, direction, serverId = LOCAL_ID }) => {
+    const q = chatState(serverId).queue;
+    const idx = q.findIndex(i => i.id === id);
     if (idx === -1) return;
     if (direction === 'up' && idx > 0) {
-      [queue[idx - 1], queue[idx]] = [queue[idx], queue[idx - 1]];
+      [q[idx - 1], q[idx]] = [q[idx], q[idx - 1]];
     }
-    if (direction === 'down' && idx < queue.length - 1) {
-      [queue[idx], queue[idx + 1]] = [queue[idx + 1], queue[idx]];
+    if (direction === 'down' && idx < q.length - 1) {
+      [q[idx], q[idx + 1]] = [q[idx + 1], q[idx]];
     }
-    emitQueue();
+    emitQueue(serverId);
   });
 
-  socket.on('queue:clear', () => {
-    queue = [];
-    emitQueue();
+  socket.on('queue:clear', ({ serverId = LOCAL_ID } = {}) => {
+    chatState(serverId).queue = [];
+    emitQueue(serverId);
   });
 
-  socket.on('reset', () => {
-    if (agentRunning) {
-      socket.emit('response', { type: 'error', content: 'Agent is busy. Wait for it to finish first.' });
+  socket.on('reset', ({ serverId = LOCAL_ID } = {}) => {
+    const st = chatState(serverId);
+    if (st.agentRunning) {
+      socket.emit('response', { serverId, type: 'error', content: 'Agent is busy. Wait for it to finish first.' });
       return;
     }
-    hasSession = false;
-    lastResponse = null;
-    pendingOutput = '';
-    queue = [];
-    emitQueue();
-    socket.emit('response', { type: 'system', content: 'Session reset — starting fresh.' });
+    st.hasSession = false;
+    st.lastResponse = null;
+    st.pendingOutput = '';
+    st.queue = [];
+    emitQueue(serverId);
+    socket.emit('response', { serverId, type: 'system', content: 'Session reset — starting fresh.' });
   });
 
   // ── Screen session events ──────────────────────────
-  socket.on('screen:list', async () => {
-    const sessions = await listScreenSessions();
-    socket.emit('screen:list', { sessions });
+  socket.on('screen:list', async (payload) => {
+    const serverId = (payload && payload.serverId) || LOCAL_ID;
+    const sessions = await listScreenSessions(serverId);
+    socket.emit('screen:list', { serverId, sessions });
   });
 
-  socket.on('screen:join', ({ sessionName, cols, rows }) => {
-    console.log('[screen] join:', sessionName, `${cols}x${rows}`);
-    attachScreen(socket, sessionName, cols, rows);
+  socket.on('screen:join', ({ sessionName, cols, rows, serverId = LOCAL_ID }) => {
+    console.log('[screen] join:', serverId, sessionName, `${cols}x${rows}`);
+    attachScreen(socket, serverId, sessionName, cols, rows);
   });
 
-  socket.on('screen:leave', ({ sessionName }) => {
-    console.log('[screen] leave:', sessionName);
-    detachScreen(socket, sessionName);
+  socket.on('screen:leave', ({ sessionName, serverId = LOCAL_ID }) => {
+    console.log('[screen] leave:', serverId, sessionName);
+    detachScreen(socket, serverId, sessionName);
   });
 
-  socket.on('screen:input', ({ sessionName, data }) => {
-    sendScreenInput(socket, sessionName, data);
+  socket.on('screen:input', ({ sessionName, data, serverId = LOCAL_ID }) => {
+    sendScreenInput(socket, serverId, sessionName, data);
   });
 
-  socket.on('screen:resize', ({ sessionName, cols, rows }) => {
-    resizeScreenPty(socket, sessionName, cols, rows);
+  socket.on('screen:resize', ({ sessionName, cols, rows, serverId = LOCAL_ID }) => {
+    resizeScreenPty(socket, serverId, sessionName, cols, rows);
+  });
+
+  // ── Server registry events (dashboard) ─────────────
+  socket.on('servers:list', () => {
+    socket.emit('servers:list', serverListPayload());
+    // Probe everything async; dashboards update as results land.
+    probeAndEmit(LOCAL_ID).catch(() => {});
+    for (const s of registry.listServers()) probeAndEmit(s.id).catch(() => {});
+  });
+
+  socket.on('servers:add', (input) => {
+    try {
+      let keyId = input.keyId;
+      if (input.newKey && input.newKey.privateKey) {
+        keyId = registry.addKey({ name: input.newKey.name || input.name + ' key', privateKey: input.newKey.privateKey }).id;
+      }
+      const server = registry.addServer({ ...input, keyId });
+      io.emit('servers:list', serverListPayload());
+      probeAndEmit(server.id, true).catch(() => {});
+    } catch (err) {
+      socket.emit('servers:error', { message: err.message });
+    }
+  });
+
+  socket.on('servers:update', ({ id, ...input }) => {
+    try {
+      let keyId = input.keyId;
+      if (input.newKey && input.newKey.privateKey) {
+        keyId = registry.addKey({ name: input.newKey.name || input.name + ' key', privateKey: input.newKey.privateKey }).id;
+      }
+      registry.updateServer(id, { ...input, ...(keyId ? { keyId } : {}) });
+      probeCache.delete(id);
+      io.emit('servers:list', serverListPayload());
+      probeAndEmit(id, true).catch(() => {});
+    } catch (err) {
+      socket.emit('servers:error', { message: err.message });
+    }
+  });
+
+  socket.on('servers:remove', ({ id }) => {
+    try {
+      registry.removeServer(id);
+      probeCache.delete(id);
+      chats.delete(id);
+      io.emit('servers:list', serverListPayload());
+    } catch (err) {
+      socket.emit('servers:error', { message: err.message });
+    }
+  });
+
+  socket.on('servers:test', async ({ id }) => {
+    try {
+      const result = await probeAndEmit(id, true);
+      socket.emit('servers:test', { id, ...result });
+    } catch (err) {
+      socket.emit('servers:test', { id, online: false, error: err.message });
+    }
+  });
+
+  socket.on('keys:remove', ({ id }) => {
+    try {
+      registry.removeKey(id);
+      io.emit('servers:list', serverListPayload());
+    } catch (err) {
+      socket.emit('servers:error', { message: err.message });
+    }
   });
 
   socket.on('disconnect', (reason) => {
-    console.log('[socket] disconnected:', socket.id, 'reason:', reason, 'agent running:', agentRunning);
+    console.log('[socket] disconnected:', socket.id, 'reason:', reason);
     detachAllScreens(socket.id);
   });
 });
@@ -501,8 +675,12 @@ module.exports = {
   screenPtys,
   spawnRunner,
   runCommand,
-  getState: () => ({ queue, hasSession, agentRunning, agentType, lastResponse, pendingOutput }),
-  resetState: () => { queue = []; hasSession = false; agentRunning = false; lastResponse = null; pendingOutput = ''; agentType = 'agent'; },
+  chatState,
+  getState: () => {
+    const st = chatState(LOCAL_ID);
+    return { queue: st.queue, hasSession: st.hasSession, agentRunning: st.agentRunning, agentType: st.agentType, lastResponse: st.lastResponse, pendingOutput: st.pendingOutput };
+  },
+  resetState: () => { chats.clear(); },
   AUTH_TOKEN,
   PORT,
 };

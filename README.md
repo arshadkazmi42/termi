@@ -10,13 +10,14 @@ A lightweight web UI that lets you chat with your **Cursor Agent CLI** from any 
 
 ## What it does
 
-- View and control `screen` sessions from any browser (default **screens** tab)
-- Chat with Cursor Agent CLI / Claude Code from the **chat** tab
-- Full conversation context maintained via `--continue` flag
+- **Multi-server dashboard (v2)** — the landing view lists all your servers. This box is always there as "this server"; add any other server with an IP, user, and SSH key and termi connects to it over SSH. One UI for your whole fleet.
+- View and control `screen` sessions on any of those servers (local via node-pty, remote via SSH)
+- Chat with Cursor Agent CLI / Claude Code per server from the **chat** tab
+- Full conversation context maintained via `--continue` flag, kept separately per server
 - Stream agent responses live as they type
-- Reset conversation with one click
 - Mobile responsive — works great on phone
-- Automation-friendly: every view has its own URL (`#/screens`, `#/screen/<name>`, `#/chat`), all controls are real labelled links/buttons/inputs, so browser agents (e.g. iChat) and assistive tech can drive it reliably
+- SSH keys are stored encrypted at rest (AES-256-GCM, key derived from your auth token); host keys are pinned on first use
+- Automation-friendly: every view has its own URL (`#/servers`, `#/srv/<id>/screens`, `#/srv/<id>/screen/<name>`, `#/srv/<id>/chat`), all controls are real labelled links/buttons/inputs, so browser agents (e.g. iChat) and assistive tech can drive it reliably
 
 ---
 

@@ -71,7 +71,8 @@ describe('socket handlers', () => {
 
       // Queue might be empty if processQueue already shifted it,
       // but we should have received a queue event
-      assert.ok(Array.isArray(q));
+      assert.ok(Array.isArray(q.queue));
+      assert.equal(q.serverId, 'local');
       client.disconnect();
     });
 
@@ -107,7 +108,7 @@ describe('socket handlers', () => {
       const queuePromise = waitEvent(client, 'queue');
       client.emit('queue:clear');
       const q = await queuePromise;
-      assert.equal(q.length, 0);
+      assert.equal(q.queue.length, 0);
       client.disconnect();
     });
   });
