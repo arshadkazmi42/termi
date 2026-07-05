@@ -749,11 +749,17 @@
 
   /* ── Servers dashboard (ireel-style) ────────────── */
   .dash-wrap {
-    flex: 1; min-height: 0; overflow-y: auto; width: 100%;
+    flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; width: 100%;
     max-width: 1000px; margin: 0 auto;
     padding: clamp(20px, 4vw, 44px) clamp(16px, 3vw, 32px) calc(32px + var(--safe-b));
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin; scrollbar-color: var(--border-hi) transparent;
+    scrollbar-gutter: stable;
   }
+  .dash-wrap::-webkit-scrollbar { width: 6px; }
+  .dash-wrap::-webkit-scrollbar-track { background: transparent; }
+  .dash-wrap::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 6px; }
+  .dash-wrap::-webkit-scrollbar-thumb:hover { background: var(--text2); }
   .dash-title {
     font-family: var(--display); font-size: clamp(1.6rem, 3.2vw, 2.15rem); font-weight: 600;
     letter-spacing: -0.02em; margin: 4px 0 6px;
