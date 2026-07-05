@@ -165,20 +165,27 @@
   .auth-btn:active { transform: scale(0.98); opacity: 0.9; }
   .auth-error { font-family: var(--mono); font-size: 11px; color: var(--red); min-height: 14px; }
 
-  /* ── App ─────────────────────────────────────────── */
+  /* ── App (full-width dashboard shell; views set their own widths) ── */
   #app {
     display: flex; flex-direction: column;
-    height: 100%; height: 100dvh; max-width: 800px; margin: 0 auto;
+    height: 100%; height: 100dvh;
   }
+  /* Chat reads best as a column; terminal + dashboard use the full width */
+  #view-chat.active { width: 100%; max-width: 900px; margin: 0 auto; }
+  #view-screens.active { width: 100%; max-width: 1100px; margin: 0 auto; }
 
   /* ── Header (logo + tab links + status + menu) ──── */
   .header {
-    display: flex; align-items: center; padding: 8px 14px;
+    display: flex; align-items: center; padding: 8px clamp(14px, 4vw, 42px);
     padding-top: calc(8px + var(--safe-t));
-    background: rgba(19,19,26,0.75); backdrop-filter: blur(20px) saturate(1.2);
+    background: rgba(12,12,16,0.72); backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
-    border-bottom: 1px solid rgba(31,31,46,0.6);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0; gap: 10px; position: relative; z-index: 10;
+  }
+  @media (hover: hover) {
+    .tab:hover { color: var(--text); }
+    .tab.active:hover { color: var(--green); }
   }
   .h-logo {
     width: 32px; height: 32px; border-radius: 9px;
@@ -500,6 +507,18 @@
   }
   #screenSessionList::-webkit-scrollbar { width: 3px; }
   #screenSessionList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  /* Desktop: sessions as a card grid instead of a phone column */
+  @media (min-width: 760px) {
+    #screenSessionList {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 10px; align-content: start; padding: 6px 18px 18px;
+    }
+    #screenSessionList .back-chip, #screenSessionList #screenSkeletons,
+    #screenSessionList #screenEmpty { grid-column: 1 / -1; }
+  }
+  @media (hover: hover) {
+    .scr-card:hover { border-color: var(--border-hi); background: var(--surface2); }
+  }
 
   /* Session cards — real links so navigation works for everything:
      humans, el.click(), synthetic events, assistive tech, AI agents. */
@@ -750,25 +769,57 @@
   /* ── Servers dashboard (ireel-style) ────────────── */
   .dash-wrap {
     flex: 1; min-height: 0; overflow-y: auto; width: 100%;
-    max-width: 720px; margin: 0 auto;
-    padding: 22px 16px calc(28px + var(--safe-b));
+    max-width: 1000px; margin: 0 auto;
+    padding: clamp(20px, 4vw, 44px) clamp(16px, 3vw, 32px) calc(32px + var(--safe-b));
     -webkit-overflow-scrolling: touch;
   }
   .dash-title {
-    font-family: var(--display); font-size: 1.65rem; font-weight: 600;
-    letter-spacing: -0.02em; margin: 4px 0 4px;
+    font-family: var(--display); font-size: clamp(1.6rem, 3.2vw, 2.15rem); font-weight: 600;
+    letter-spacing: -0.02em; margin: 4px 0 6px;
   }
-  .dash-sub { color: var(--text2); font-size: 0.92rem; margin-bottom: 20px; }
+  .dash-sub { color: var(--text2); font-size: 0.94rem; margin-bottom: 22px; }
+  .dash-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin-bottom: 26px; max-width: 560px;
+  }
+  .stat {
+    border: 1px solid var(--border); border-radius: 13px; background: var(--surface);
+    padding: 14px 16px;
+  }
+  .stat-n { font-family: var(--display); font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }
+  .stat-n .stat-hint { font-size: 0.8rem; color: var(--dim); font-family: var(--mono); margin-left: 4px; }
+  .stat-l {
+    font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: 1.4px; color: var(--dim); margin-top: 3px;
+  }
+  .dash-sec {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 0 0 12px;
+  }
+  .dash-sec h2 { font-size: 1.02rem; font-weight: 700; }
+  .dash-add-top {
+    font-size: 0.85rem; font-weight: 600; color: var(--text);
+    background: none; border: 1px solid var(--border); border-radius: 9px;
+    padding: 8px 14px; cursor: pointer; font-family: var(--sans);
+  }
   .dash-list {
     border: 1px solid var(--border); border-radius: 14px;
     overflow: hidden; background: var(--surface);
   }
-  .dash-empty { padding: 34px 20px; text-align: center; color: var(--text2); font-size: 0.9rem; }
+  .dash-empty { padding: 26px 20px; text-align: center; color: var(--text2); font-size: 0.9rem; border-top: 1px solid var(--border); }
   .srv-row {
     display: flex; align-items: center; gap: 12px;
-    padding: 15px 16px; border-bottom: 1px solid var(--border);
+    padding: 16px 18px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.12s;
   }
-  .srv-row:last-child { border-bottom: none; }
+  .srv-row:last-of-type { border-bottom: none; }
+  @media (hover: hover) {
+    .srv-row:hover { background: rgba(255,255,255,0.03); }
+    .srv-open:hover { border-color: var(--border-hi); }
+    .srv-icon:hover { color: var(--text); border-color: var(--border-hi); }
+    .srv-icon.del:hover { color: var(--red); border-color: rgba(240,116,106,0.45); }
+    .dash-add:hover, .dash-add-top:hover { color: var(--green); border-color: var(--green); }
+  }
   .srv-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--dim); }
   .srv-dot.on  { background: #5fd08b; box-shadow: 0 0 8px rgba(95,208,139,0.5); }
   .srv-dot.off { background: var(--red); }
@@ -838,6 +889,13 @@
   @media (max-width: 520px) {
     .sf-grid { grid-template-columns: 1fr 1fr; }
     .srv-open { padding: 7px 10px; font-size: 0.8rem; }
+    .dash-stats { gap: 8px; }
+    .stat { padding: 11px 12px; }
+    .stat-n { font-size: 1.25rem; }
+  }
+  @media (min-width: 760px) {
+    .sf-grid { grid-template-columns: 2fr 3fr 1.2fr 0.8fr; }
+    .srv-form { padding: 20px; }
   }
 
   /* ── Animated Success / Error ──────────────────── */
@@ -991,11 +1049,20 @@
   <section class="view" id="view-servers">
     <div class="dash-wrap">
       <h1 class="dash-title">Your servers</h1>
-      <p class="dash-sub">Pick a box to see its screens, or add one over SSH.</p>
-      <div class="dash-list" id="serverList" role="list" aria-label="Configured servers">
-        <div class="dash-empty" id="serverListEmpty" hidden>No remote servers yet — add one below.</div>
+      <p class="dash-sub">Every box you manage, one place. Tap a server to work on it.</p>
+      <div class="dash-stats" aria-label="Fleet overview">
+        <div class="stat"><div class="stat-n" id="statServers">–</div><div class="stat-l">servers</div></div>
+        <div class="stat"><div class="stat-n" id="statOnline">–</div><div class="stat-l">online</div></div>
+        <div class="stat"><div class="stat-n" id="statScreens">–</div><div class="stat-l">screens running</div></div>
       </div>
-      <button type="button" class="dash-add" id="addServerBtn" onclick="openServerForm()">+ add server</button>
+      <div class="dash-sec">
+        <h2>Servers</h2>
+        <button type="button" class="dash-add-top" id="addServerBtn" onclick="openServerForm()">+ add server</button>
+      </div>
+      <div class="dash-list" id="serverList" role="list" aria-label="Configured servers"></div>
+      <div class="dash-empty" id="serverListEmpty" hidden style="border:1px dashed var(--border-hi);border-radius:14px;margin-top:12px">
+        No other servers yet — add one with an IP and SSH key to manage it from here.
+      </div>
       <form class="srv-form" id="serverForm" hidden onsubmit="saveServerForm(event)">
         <div class="sf-title" id="sfTitle">Add server</div>
         <div class="sf-grid">
@@ -1290,6 +1357,7 @@
     socket.on('servers:status',(st)=>{
       serverStatus[st.id]=st;
       updateServerRow(st.id);
+      updateDashStats();
     });
     socket.on('servers:error',({message})=>{
       const err=$('sfError');
@@ -1529,7 +1597,22 @@
       </div>`;
     row.querySelector('.srv-edit').addEventListener('click',()=>openServerForm(s.id));
     row.querySelector('.srv-del').addEventListener('click',()=>deleteServer(s.id));
+    // The whole row is a target; buttons and the Open link handle themselves.
+    row.addEventListener('click',e=>{
+      if(e.target.closest('button,a'))return;
+      haptic('light');
+      location.hash=srvHash(s.id,'screens');
+    });
     return row;
+  }
+
+  function updateDashStats(){
+    const ids=['local',...servers.map(s=>s.id)];
+    const known=ids.map(id=>serverStatus[id]).filter(Boolean);
+    const probing=known.length<ids.length;
+    $('statServers').textContent=ids.length;
+    $('statOnline').textContent=known.filter(s=>s.online).length+(probing?'+':'');
+    $('statScreens').textContent=known.reduce((n,s)=>n+(s.screens||0),0)+(probing?'+':'');
   }
 
   function updateServerRow(id){
@@ -1565,6 +1648,7 @@
     list.querySelectorAll('.srv-row[data-server]').forEach(r=>{ if(!seen.has(r.dataset.server))r.remove(); });
     $('serverListEmpty').hidden=servers.length>0;
     refreshKeySelect();
+    updateDashStats();
   }
 
   // ── Add / edit server form ──────────────────────────
