@@ -46,6 +46,25 @@ describe('registry', () => {
     assert.equal(registry.getKeyMaterial(id).passphrase, 'sekret-pass');
   });
 
+  it('updateKey can add a passphrase without replacing material', () => {
+    const { id } = registry.addKey({ name: 'late pp', privateKey: FAKE_KEY });
+    assert.equal(registry.getKeyMaterial(id).passphrase, undefined);
+    registry.updateKey(id, { passphrase: 'added-later' });
+    const m = registry.getKeyMaterial(id);
+    assert.equal(m.passphrase, 'added-later');
+    assert.ok(m.privateKey.includes('fakekeymaterial')); // material untouched
+  });
+
+  it('updateKey renames and replaces material, clearing stale passphrase', () => {
+    const { id } = registry.addKey({ name: 'old name', privateKey: FAKE_KEY, passphrase: 'old-pass' });
+    registry.updateKey(id, { name: 'new name', privateKey: FAKE_KEY.replace('fakekey', 'newkey00') });
+    assert.equal(registry.listKeys().find(k => k.id === id).name, 'new name');
+    const m = registry.getKeyMaterial(id);
+    assert.ok(m.privateKey.includes('newkey00material'));
+    assert.equal(m.passphrase, undefined); // replaced material, no passphrase given
+    assert.throws(() => registry.updateKey(id, { privateKey: 'junk' }), /valid private key/);
+  });
+
   it('validates server input', () => {
     const { id: keyId } = registry.addKey({ name: 'k2', privateKey: FAKE_KEY });
     assert.throws(() => registry.addServer({ host: 'bad host!', user: 'root', keyId }), /Invalid host/);

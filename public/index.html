@@ -846,6 +846,8 @@
     font-family: var(--mono); font-size: 0.68rem; color: var(--red);
     margin-top: 4px; word-break: break-word;
   }
+  .key-ico { font-size: 15px; flex-shrink: 0; opacity: 0.75; }
+  .key-row { cursor: default; }
   .srv-screens { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
   .srv-chip {
     display: inline-flex; align-items: center; gap: 6px;
@@ -1106,6 +1108,26 @@
         <div class="sf-row">
           <button type="button" class="sf-btn" onclick="closeServerForm()">cancel</button>
           <button type="submit" class="sf-btn primary" id="sfSave">save server</button>
+        </div>
+      </form>
+
+      <div class="dash-sec" style="margin-top:30px">
+        <h2>SSH keys</h2>
+        <button type="button" class="dash-add-top" id="addKeyBtn" onclick="openKeyForm()">+ add key</button>
+      </div>
+      <div class="dash-list" id="keyList" role="list" aria-label="Stored SSH keys"></div>
+      <div class="dash-empty" id="keyListEmpty" hidden style="border:1px dashed var(--border-hi);border-radius:14px;margin-top:12px">
+        No keys stored yet — add one to connect servers.
+      </div>
+      <form class="srv-form" id="keyForm" hidden onsubmit="saveKeyForm(event)" style="margin-top:14px">
+        <div class="sf-title" id="kfTitle">Add SSH key</div>
+        <label class="sf-field">name<input id="kfName" placeholder="my laptop key" autocomplete="off"></label>
+        <textarea id="kfKeyText" class="sf-keytext" placeholder="paste private key (OpenSSH / PEM) — stored encrypted, never shown again" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+        <input id="kfKeyPass" class="sf-keypass" type="password" placeholder="key passphrase — leave empty if none" autocomplete="off">
+        <div class="sf-err" id="kfError" role="alert"></div>
+        <div class="sf-row">
+          <button type="button" class="sf-btn" onclick="closeKeyForm()">cancel</button>
+          <button type="submit" class="sf-btn primary" id="kfSave">save key</button>
         </div>
       </form>
     </div>
@@ -1394,8 +1416,8 @@
       updateDashStats();
     });
     socket.on('servers:error',({message})=>{
-      const err=$('sfError');
-      if(!$('serverForm').hidden){ err.textContent=message; $('sfSave').disabled=false; }
+      if(!$('serverForm').hidden){ $('sfError').textContent=message; $('sfSave').disabled=false; }
+      if(!$('keyForm').hidden){ $('kfError').textContent=message; $('kfSave').disabled=false; }
       showToast(message);
     });
     socket.on('servers:test',(res)=>{
@@ -1711,7 +1733,106 @@
     list.querySelectorAll('.srv-row[data-server]').forEach(r=>{ if(!seen.has(r.dataset.server))r.remove(); });
     $('serverListEmpty').hidden=servers.length>0;
     refreshKeySelect();
+    renderKeyList();
     updateDashStats();
+  }
+
+  // ── SSH key list ────────────────────────────────────
+  let editingKey=null;
+
+  function keyUsedBy(id){ return servers.filter(s=>s.keyId===id).map(s=>s.name); }
+
+  function buildKeyRow(k){
+    const row=document.createElement('div');
+    row.className='srv-row key-row'; row.dataset.key=k.id; row.setAttribute('role','listitem');
+    row.style.cursor='default';
+    row.innerHTML=`<span class="key-ico" aria-hidden="true">&#128273;</span>
+      <div class="srv-info">
+        <div class="srv-name"><span class="key-name"></span></div>
+        <div class="srv-sub key-sub"></div>
+      </div>
+      <div class="srv-acts">
+        <button type="button" class="srv-icon key-edit" title="Edit key" aria-label="Edit key">&#9998;</button>
+        <button type="button" class="srv-icon del key-del" title="Delete key" aria-label="Delete key">&times;</button>
+      </div>`;
+    row.querySelector('.key-edit').addEventListener('click',()=>openKeyForm(k.id));
+    row.querySelector('.key-del').addEventListener('click',()=>deleteKey(k.id));
+    return row;
+  }
+
+  function renderKeyList(){
+    const list=$('keyList');
+    const seen=new Set();
+    sshKeys.forEach(k=>{
+      seen.add(k.id);
+      let row=list.querySelector(`.key-row[data-key="${cssEsc(k.id)}"]`);
+      if(!row){row=buildKeyRow(k);list.appendChild(row);}
+      row.querySelector('.key-name').textContent=k.name;
+      const used=keyUsedBy(k.id);
+      row.querySelector('.key-sub').textContent=used.length
+        ?('used by '+used.join(', '))
+        :'not used by any server';
+    });
+    list.querySelectorAll('.key-row').forEach(r=>{ if(!seen.has(r.dataset.key))r.remove(); });
+    $('keyListEmpty').hidden=sshKeys.length>0;
+  }
+
+  function openKeyForm(id){
+    editingKey=id||null;
+    const k=id?sshKeys.find(x=>x.id===id):null;
+    $('kfTitle').textContent=k?('Edit '+k.name):'Add SSH key';
+    $('kfName').value=k?k.name:'';
+    $('kfKeyText').value='';
+    $('kfKeyText').placeholder=k
+      ?'leave empty to keep the current key material'
+      :'paste private key (OpenSSH / PEM) — stored encrypted, never shown again';
+    $('kfKeyPass').value='';
+    $('kfKeyPass').placeholder=k
+      ?'set / replace passphrase — leave empty to keep as is'
+      :'key passphrase — leave empty if none';
+    $('kfError').textContent='';
+    $('kfSave').disabled=false;
+    $('keyForm').hidden=false; $('addKeyBtn').hidden=true;
+    $('kfName').focus();
+    haptic('light');
+  }
+
+  function closeKeyForm(){
+    $('keyForm').hidden=true; $('addKeyBtn').hidden=false;
+    editingKey=null;
+  }
+
+  function saveKeyForm(e){
+    e.preventDefault();
+    if(!socket||!connected){showToast('not connected');return;}
+    const err=$('kfError'); err.textContent='';
+    const name=$('kfName').value.trim();
+    const material=$('kfKeyText').value.trim();
+    const pass=$('kfKeyPass').value;
+    if(editingKey){
+      const payload={id:editingKey};
+      if(name)payload.name=name;
+      if(material)payload.privateKey=material;
+      if(pass)payload.passphrase=pass;
+      socket.emit('keys:update',payload);
+    } else {
+      if(!material){err.textContent='Paste a private key.';return;}
+      socket.emit('keys:add',{name:name||'key',privateKey:material,...(pass?{passphrase:pass}:{})});
+    }
+    $('kfSave').disabled=true;
+    setTimeout(()=>{ if($('kfError').textContent==='')closeKeyForm(); },600);
+    showToast(editingKey?'updating key...':'adding key...');
+    haptic('medium');
+  }
+
+  function deleteKey(id){
+    const k=sshKeys.find(x=>x.id===id);
+    if(!k)return;
+    const used=keyUsedBy(id);
+    if(used.length){showToast('key is used by '+used.join(', '));return;}
+    if(!confirm('Delete key "'+k.name+'" permanently?'))return;
+    socket.emit('keys:remove',{id});
+    haptic('medium');
   }
 
   // ── Add / edit server form ──────────────────────────

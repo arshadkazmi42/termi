@@ -652,6 +652,28 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('keys:add', (input) => {
+    try {
+      registry.addKey({ name: input.name, privateKey: input.privateKey, passphrase: input.passphrase });
+      io.emit('servers:list', serverListPayload());
+    } catch (err) {
+      socket.emit('servers:error', { message: err.message });
+    }
+  });
+
+  socket.on('keys:update', ({ id, ...input }) => {
+    try {
+      registry.updateKey(id, input);
+      // Changed material can fix (or break) connectivity — re-probe dependents.
+      for (const s of registry.listServers()) {
+        if (s.keyId === id) { probeCache.delete(s.id); probeAndEmit(s.id, true).catch(() => {}); }
+      }
+      io.emit('servers:list', serverListPayload());
+    } catch (err) {
+      socket.emit('servers:error', { message: err.message });
+    }
+  });
+
   socket.on('keys:remove', ({ id }) => {
     try {
       registry.removeKey(id);
