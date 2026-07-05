@@ -172,7 +172,6 @@
   }
   /* Chat reads best as a column; terminal + dashboard use the full width */
   #view-chat.active { width: 100%; max-width: 900px; margin: 0 auto; }
-  #view-screens.active { width: 100%; max-width: 1100px; margin: 0 auto; }
 
   /* ── Header (logo + tab links + status + menu) ──── */
   .header {
@@ -511,52 +510,23 @@
   }
   .scr-refresh:active { color: var(--green); transform: scale(0.94); }
 
-  #screenSessionList {
-    flex: 1; overflow-y: auto; padding: 6px 14px 14px;
-    display: flex; flex-direction: column; gap: 8px;
-    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  }
-  #screenSessionList::-webkit-scrollbar { width: 3px; }
-  #screenSessionList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  /* Desktop: sessions as a card grid instead of a phone column */
-  @media (min-width: 760px) {
-    #screenSessionList {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 10px; align-content: start; padding: 6px 18px 18px;
-    }
-    #screenSessionList .back-chip, #screenSessionList #screenSkeletons,
-    #screenSessionList #screenEmpty { grid-column: 1 / -1; }
-  }
-  @media (hover: hover) {
-    .scr-card:hover { border-color: var(--border-hi); background: var(--surface2); }
-  }
-
-  /* Session cards — real links so navigation works for everything:
-     humans, el.click(), synthetic events, assistive tech, AI agents. */
+  /* Session rows — real links so navigation works for everything:
+     humans, el.click(), synthetic events, assistive tech, AI agents.
+     Same list language as the dashboard. */
   .scr-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--r); padding: 14px 16px; cursor: pointer;
-    transition: all 0.15s; display: flex; align-items: center; gap: 14px;
-    animation: blockIn 0.2s ease; position: relative; overflow: hidden;
-    width: 100%; text-align: left; font: inherit; color: inherit;
-    text-decoration: none; flex-shrink: 0;
+    display: flex; align-items: center; gap: 12px;
+    padding: 15px 16px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.12s;
+    color: inherit; text-decoration: none;
   }
-  .scr-card::after {
-    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-    border-radius: 0 2px 2px 0;
+  .scr-card:last-child { border-bottom: none; }
+  .scr-card:active { background: var(--surface2); }
+  @media (hover: hover) {
+    .scr-card:hover { background: rgba(255,255,255,0.03); }
   }
-  .scr-card.live::after { background: var(--green); }
-  .scr-card.idle::after { background: var(--orange); }
-  .scr-card:active { background: var(--surface2); transform: scale(0.98); }
-  .scr-card.back-chip { justify-content: center; gap: 8px; }
-
-  .scr-icon {
-    width: 40px; height: 40px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-size: 16px; font-weight: 700; flex-shrink: 0;
-  }
-  .scr-icon.live { background: var(--green-dim); color: var(--green); }
-  .scr-icon.idle { background: var(--orange-dim); color: var(--orange); }
+  .srv-dot.idle-dot { background: var(--orange); }
+  #screenSessionList .skel-card { border: none; border-bottom: 1px solid var(--border); border-radius: 0; margin: 0; }
+  #screenSessionList .skel-card:last-child { border-bottom: none; }
 
   .scr-info { flex: 1; min-width: 0; }
   .scr-name {
@@ -1160,24 +1130,21 @@
 
   <!-- ── Screens: session list ──────────────────────── -->
   <section class="view active" id="view-screens">
-    <div class="scr-header">
-      <h2 class="scr-title"><span id="scrTitleText">sessions</span> <span class="scr-count" id="screenCount">0</span></h2>
-      <button class="scr-refresh" onclick="refreshScreens()" aria-label="Refresh session list">&#8635; refresh</button>
-    </div>
-    <div id="screenSessionList">
-      <a id="backToPanes" class="scr-card back-chip" href="#/screens" hidden aria-label="Back to open terminal panes">
-        <span class="scr-chevron" style="transform:rotate(180deg)">&#8250;</span>
-        <div class="scr-name">back to open panes</div>
-      </a>
-      <div id="screenSkeletons" hidden>
-        <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
-        <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
-        <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
+    <div class="dash-wrap">
+      <h1 class="dash-title" id="scrBigTitle">sessions</h1>
+      <p class="dash-sub">Live terminals on this server — tap a session to open it.</p>
+      <div class="dash-sec">
+        <h2><span id="scrTitleText">sessions</span> <span class="scr-count" id="screenCount">0</span></h2>
+        <a id="backToPanes" class="dash-add-top" href="#/screens" hidden aria-label="Back to open terminal panes">&#8592; back to panes</a>
+        <button type="button" class="dash-add-top" onclick="createScreenPrompt()" aria-label="Start a new screen session">+ new screen</button>
+        <button type="button" class="dash-add-top" onclick="refreshScreens()" aria-label="Refresh session list">&#8635;</button>
       </div>
-      <div id="screenEmpty" class="scr-empty" hidden>
-        <div class="scr-empty-icon">&gt;_</div>
-        <div class="scr-empty-text">No active screen sessions</div>
-        <div class="scr-empty-hint"><span class="g">$</span> screen -S &lt;name&gt;</div>
+      <div class="dash-list" id="screenSessionList">
+        <div id="screenSkeletons" hidden>
+          <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
+          <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
+        </div>
+        <div id="screenEmpty" class="dash-empty" hidden>No active screen sessions — starting one for you...</div>
       </div>
     </div>
   </section>
@@ -1553,7 +1520,8 @@
   }
 
   function updateScreensChrome(){
-    $('scrTitleText').textContent=route.add?'add split pane':serverLabel();
+    $('scrBigTitle').textContent=route.add?'Add split pane':serverLabel();
+    $('scrTitleText').textContent='sessions';
     const back=$('backToPanes');
     back.hidden=!route.add;
     if(route.add)back.setAttribute('href',termHash(route.sessions));
@@ -1595,7 +1563,7 @@
     const a=document.createElement('a');
     a.className='scr-card';
     a.dataset.session=s.fullName;
-    a.innerHTML=`<div class="scr-icon">&gt;_</div>
+    a.innerHTML=`<span class="srv-dot"></span>
       <div class="scr-info">
         <div class="scr-name"></div>
         <div class="scr-meta"><span class="scr-badge"></span><span class="scr-pid"></span><span class="scr-badge live scr-open" hidden>open</span></div>
@@ -1613,12 +1581,23 @@
     a.setAttribute('href',cardHref(s));
     a.setAttribute('aria-label',(open?'Focus open session ':'Open screen session ')+s.name);
     a.dataset.open=open?'1':'0';
-    a.querySelector('.scr-icon').className='scr-icon '+(live?'live':'idle');
+    a.querySelector('.srv-dot').className='srv-dot '+(live?'on':'idle-dot');
     const b=a.querySelector('.scr-badge');
     b.className='scr-badge '+(live?'live':'idle');
     b.textContent=live?'live':'idle';
     a.querySelector('.scr-pid').textContent='pid '+s.pid;
     a.querySelector('.scr-open').hidden=!open;
+  }
+
+  // "+ new screen" — name it and it appears on this server.
+  function createScreenPrompt(){
+    if(!socket||!connected){showToast('not connected');return;}
+    const name=prompt('Name for the new screen session:');
+    if(name===null)return;
+    const clean=name.trim().replace(/[^\w.\-]+/g,'-')||'terminal';
+    socket.emit('screen:create',{serverId:route.server||curServer,name:clean});
+    showToast('creating '+clean+'...');
+    haptic('medium');
   }
 
   // A server with zero screens is a dead end — provision a default
@@ -2339,9 +2318,10 @@
   // Pull to refresh on the session list
   let ptrStartY=0,ptrActive=false;
   function setupPullToRefresh(){
-    const list=$('screenSessionList');
-    list.addEventListener('touchstart',e=>{if(list.scrollTop===0){ptrStartY=e.touches[0].clientY;ptrActive=true;}},{passive:true});
-    list.addEventListener('touchend',e=>{if(!ptrActive)return;ptrActive=false;if(e.changedTouches[0].clientY-ptrStartY>60){haptic('light');loadScreenSessions();showToast('refreshing...');}},{passive:true});
+    // The dash-wrap is the scroll container now, not the list itself.
+    const wrap=document.querySelector('#view-screens .dash-wrap');
+    wrap.addEventListener('touchstart',e=>{if(wrap.scrollTop===0){ptrStartY=e.touches[0].clientY;ptrActive=true;}},{passive:true});
+    wrap.addEventListener('touchend',e=>{if(!ptrActive)return;ptrActive=false;if(e.changedTouches[0].clientY-ptrStartY>60){haptic('light');loadScreenSessions();showToast('refreshing...');}},{passive:true});
   }
 
   // ── Chat messages ───────────────────────────────────
