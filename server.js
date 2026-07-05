@@ -577,6 +577,23 @@ io.on('connection', (socket) => {
     socket.emit('screen:list', { serverId, sessions });
   });
 
+  // Create a detached screen session (used to auto-provision a default
+  // terminal when a server has none).
+  socket.on('screen:create', async ({ serverId = LOCAL_ID, name }) => {
+    const clean = String(name || 'terminal').replace(/[^\w.\-]/g, '-').slice(0, 40);
+    if (!SAFE_SESSION.test(clean)) return;
+    console.log('[screen] create:', serverId, clean);
+    try {
+      if (serverId === LOCAL_ID) await execAsync(`screen -dmS ${clean}`, { timeout: 5000, cwd: WORK_DIR });
+      else await remote.execOnServer(serverId, `screen -dmS ${clean}`, { timeout: 12000 });
+      probeCache.delete(serverId);
+      const sessions = await listScreenSessions(serverId);
+      socket.emit('screen:list', { serverId, sessions });
+    } catch (err) {
+      socket.emit('servers:error', { message: 'Could not create screen session: ' + err.message });
+    }
+  });
+
   socket.on('screen:join', ({ sessionName, cols, rows, serverId = LOCAL_ID }) => {
     console.log('[screen] join:', serverId, sessionName, `${cols}x${rows}`);
     attachScreen(socket, serverId, sessionName, cols, rows);

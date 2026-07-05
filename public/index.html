@@ -1594,6 +1594,23 @@
     a.querySelector('.scr-open').hidden=!open;
   }
 
+  // A server with zero screens is a dead end — provision a default
+  // "<server-name>.terminal" session so there's always a shell to open.
+  // Once per server per page load, and only from the screens view itself
+  // (dashboard probes must never spawn sessions).
+  const autoCreated=new Set();
+  function maybeAutoCreateScreen(sessions){
+    if(route.view!=='screens'||route.add)return;
+    if(sessions.length)return;
+    const sid=route.server||curServer;
+    if(sid!=='local'&&!servers.length)return; // wait until names are known
+    if(autoCreated.has(sid))return;
+    autoCreated.add(sid);
+    const base=(sid==='local'?'local':serverLabel(sid)).toLowerCase().replace(/[^\w\-]+/g,'-');
+    socket.emit('screen:create',{serverId:sid,name:base+'.terminal'});
+    showToast('starting a terminal session...');
+  }
+
   // In-place keyed rendering: card nodes keep their identity between the 5s
   // auto-refreshes, so a click never lands on a node that was just replaced.
   function renderScreenList(sessions){
@@ -1612,6 +1629,7 @@
     });
     list.querySelectorAll('a.scr-card[data-session]').forEach(c=>{ if(!seen.has(c.dataset.session))c.remove(); });
     $('screenEmpty').hidden=sessions.length>0;
+    maybeAutoCreateScreen(sessions);
     // keep open panes' status badges fresh
     screenPanes.forEach((p,k)=>{
       const s=sessions.find(x=>x.fullName===k);
