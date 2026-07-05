@@ -804,14 +804,26 @@
     letter-spacing: 1.4px; color: var(--dim); margin-top: 3px;
   }
   .dash-sec {
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     margin: 0 0 12px;
   }
-  .dash-sec h2 { font-size: 1.02rem; font-weight: 700; }
+  .dash-sec h2 { font-size: 1.02rem; font-weight: 700; margin-right: auto; }
+  .dash-search {
+    flex: 0 1 260px; min-width: 150px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 9px;
+    color: var(--text); font-family: var(--mono); font-size: 16px;
+    padding: 8px 12px; outline: none;
+  }
+  .dash-search:focus { border-color: var(--green); }
+  .dash-search::placeholder { color: var(--dim); }
+  @media (max-width: 560px) {
+    .dash-search { order: 5; flex: 1 1 100%; }
+  }
   .dash-add-top {
     font-size: 0.85rem; font-weight: 600; color: var(--text);
     background: none; border: 1px solid var(--border); border-radius: 9px;
     padding: 8px 14px; cursor: pointer; font-family: var(--sans);
+    text-decoration: none; display: inline-flex; align-items: center;
   }
   .dash-list {
     border: 1px solid var(--border); border-radius: 14px;
@@ -1085,9 +1097,13 @@
       </div>
       <div class="dash-sec">
         <h2>Servers</h2>
+        <input id="srvSearch" class="dash-search" type="search" placeholder="search servers..."
+          oninput="filterServers(this.value)" aria-label="Search servers" autocomplete="off">
+        <a class="dash-add-top" href="#/keys">ssh keys</a>
         <button type="button" class="dash-add-top" id="addServerBtn" onclick="openServerForm()">+ add server</button>
       </div>
       <div class="dash-list" id="serverList" role="list" aria-label="Configured servers"></div>
+      <div class="dash-empty" id="serverNoMatch" hidden>No servers match your search.</div>
       <div class="dash-empty" id="serverListEmpty" hidden style="border:1px dashed var(--border-hi);border-radius:14px;margin-top:12px">
         No other servers yet — add one with an IP and SSH key to manage it from here.
       </div>
@@ -1111,8 +1127,17 @@
         </div>
       </form>
 
-      <div class="dash-sec" style="margin-top:30px">
-        <h2>SSH keys</h2>
+    </div>
+  </section>
+
+  <!-- ── SSH keys (own page — keeps the dashboard scalable) ── -->
+  <section class="view" id="view-keys">
+    <div class="dash-wrap">
+      <h1 class="dash-title">SSH keys</h1>
+      <p class="dash-sub">Keys are stored encrypted and never shown again. Editing a key re-tests every server that uses it.</p>
+      <div class="dash-sec">
+        <a class="dash-add-top" href="#/servers">&#8592; servers</a>
+        <span style="flex:1"></span>
         <button type="button" class="dash-add-top" id="addKeyBtn" onclick="openKeyForm()">+ add key</button>
       </div>
       <div class="dash-list" id="keyList" role="list" aria-label="Stored SSH keys"></div>
@@ -1449,6 +1474,7 @@
     if(parts[0]==='screen'&&parts[1]) return {view:'term',server:'local',sessions:dec(parts[1]),add:false};
     if(parts[0]==='screens'&&parts[1]==='add'&&parts[2]) return {view:'screens',server:'local',sessions:dec(parts[2]),add:true};
     if(parts[0]==='screens') return {view:'screens',server:'local',sessions:[],add:false};
+    if(parts[0]==='keys') return {view:'keys',server:null,sessions:[],add:false};
     if(parts[0]==='srv'&&parts[1]){
       const srv=decodeURIComponent(parts[1]);
       if(parts[2]==='chat') return {view:'chat',server:srv,sessions:[],add:false};
@@ -1489,6 +1515,7 @@
       $('tab-chat').setAttribute('href',srvHash(curServer,'chat'));
     }
     $('view-servers').classList.toggle('active',r.view==='servers');
+    $('view-keys').classList.toggle('active',r.view==='keys');
     $('view-screens').classList.toggle('active',r.view==='screens');
     $('view-term').classList.toggle('active',r.view==='term');
     $('view-chat').classList.toggle('active',r.view==='chat');
@@ -1500,10 +1527,10 @@
       if(connected)socket.emit('init',{serverId:r.server});
     }
 
-    if(r.view==='servers'){
+    if(r.view==='servers'||r.view==='keys'){
       syncPanes([]);
       if(connected)socket.emit('servers:list');
-      document.title='termi — servers';
+      document.title=r.view==='keys'?'termi — ssh keys':'termi — servers';
     } else if(r.view==='chat'){
       syncPanes([]);
       document.title='termi — '+serverLabel()+' chat';
@@ -1550,7 +1577,7 @@
   function startScreenRefresh(){
     stopScreenRefresh();
     screenRefreshInterval=setInterval(()=>{
-      if(route.view==='servers')socket.emit('servers:list');
+      if(route.view==='servers'||route.view==='keys')socket.emit('servers:list');
       else if(route.view!=='chat')loadScreenSessions();
     },5000);
   }
@@ -1696,6 +1723,25 @@
     $('statScreens').textContent=known.reduce((n,s)=>n+(s.screens||0),0)+(probing?'+':'');
   }
 
+  // Client-side search over name/host/user — a 100+ fleet needs filtering,
+  // not scrolling. Rows are hidden, not removed, so keyed rendering holds.
+  let srvFilter='';
+  function filterServers(v){
+    srvFilter=(v||'').trim().toLowerCase();
+    applyServerFilter();
+  }
+  function applyServerFilter(){
+    let visible=0;
+    $('serverList').querySelectorAll('.srv-row[data-server]').forEach(r=>{
+      const hit=!srvFilter||(r.dataset.search||'').includes(srvFilter);
+      r.style.display=hit?'':'none';
+      if(hit)visible++;
+    });
+    $('serverNoMatch').hidden=!(srvFilter&&visible===0);
+  }
+
+  const CHIP_CAP=8;
+
   function updateServerRow(id){
     const row=$('serverList').querySelector(`.srv-row[data-server="${cssEsc(id)}"]`);
     if(!row)return;
@@ -1707,6 +1753,8 @@
     row.querySelector('.srv-sub').textContent=id==='local'
       ?'this box — no SSH needed'
       :`${s.user}@${s.host}${s.port&&s.port!==22?':'+s.port:''}`;
+    row.dataset.search=(id==='local'?'local this server ':'')+
+      (s.name+' '+(s.user||'')+' '+(s.host||'')).toLowerCase();
     const scr=row.querySelector('.srv-scr');
     const off=row.querySelector('.srv-off');
     scr.hidden=!(st.online&&typeof st.screens==='number');
@@ -1720,11 +1768,13 @@
     // Keyed by content so the 5s refresh never swaps a chip mid-tap.
     const chips=row.querySelector('.srv-screens');
     const sess=st.sessions||[];
-    const ser=JSON.stringify(sess.map(x=>[x.fullName,x.status]));
+    const total=typeof st.screens==='number'?st.screens:sess.length;
+    const shown=sess.slice(0,CHIP_CAP);
+    const ser=JSON.stringify([total,...shown.map(x=>[x.fullName,x.status])]);
     if(chips.dataset.ser!==ser){
       chips.dataset.ser=ser;
       chips.innerHTML='';
-      sess.forEach(x=>{
+      shown.forEach(x=>{
         const a=document.createElement('a');
         a.className='srv-chip '+(x.status==='attached'?'live':'idle');
         a.href=srvHash(id,'screen/'+encodeURIComponent(x.fullName));
@@ -1732,6 +1782,14 @@
         a.setAttribute('aria-label','Open screen '+x.name+' on '+s.name);
         chips.appendChild(a);
       });
+      if(total>shown.length){
+        const more=document.createElement('a');
+        more.className='srv-chip';
+        more.href=srvHash(id,'screens');
+        more.textContent='+'+(total-shown.length)+' more';
+        more.setAttribute('aria-label','See all '+total+' screens on '+s.name);
+        chips.appendChild(more);
+      }
     }
     chips.hidden=sess.length===0;
   }
@@ -1750,6 +1808,7 @@
     });
     list.querySelectorAll('.srv-row[data-server]').forEach(r=>{ if(!seen.has(r.dataset.server))r.remove(); });
     $('serverListEmpty').hidden=servers.length>0;
+    applyServerFilter();
     refreshKeySelect();
     renderKeyList();
     updateDashStats();
