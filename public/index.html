@@ -766,19 +766,72 @@
   }
   .dash-sub { color: var(--text2); font-size: 0.94rem; margin-bottom: 22px; }
   .dash-stats {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-    margin-bottom: 26px; max-width: 560px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin-bottom: 26px; max-width: 720px;
   }
   .stat {
     border: 1px solid var(--border); border-radius: 13px; background: var(--surface);
-    padding: 14px 16px;
+    padding: 14px 16px; transition: border-color 0.2s, background 0.2s;
   }
+  /* Offline card lights up red only when something's actually down */
+  .stat.alert { border-color: rgba(240,116,106,0.5); background: var(--red-dim); }
+  .stat.alert .stat-n { color: var(--red); }
+  .stat.alert .stat-l { color: var(--red); opacity: 0.85; }
   .stat-n { font-family: var(--display); font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }
   .stat-n .stat-hint { font-size: 0.8rem; color: var(--dim); font-family: var(--mono); margin-left: 4px; }
   .stat-l {
     font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase;
     letter-spacing: 1.4px; color: var(--dim); margin-top: 3px;
   }
+  @media (max-width: 560px) { .dash-stats { grid-template-columns: repeat(2, 1fr); } }
+
+  /* Compact fleet-status pill on the dashboard, links to analytics */
+  .dash-summary {
+    display: flex; align-items: center; gap: 12px; justify-content: space-between;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+    padding: 11px 15px; margin-bottom: 22px; text-decoration: none; color: var(--text2);
+    font-size: 0.88rem; transition: border-color 0.12s;
+  }
+  .dash-summary .dash-summary-go { color: var(--green); font-weight: 600; font-size: 0.82rem; flex-shrink: 0; }
+  @media (hover: hover) { .dash-summary:hover { border-color: var(--border-hi); } }
+  .sum-down { color: var(--red); font-weight: 700; }
+
+  /* Analytics per-server metric cards */
+  .an-grid {
+    display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 30px;
+  }
+  @media (min-width: 680px) { .an-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1040px) { .an-grid { grid-template-columns: repeat(3, 1fr); } }
+  .an-card {
+    border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+    padding: 15px 16px; display: flex; flex-direction: column; gap: 11px;
+  }
+  .an-card.down { border-color: rgba(240,116,106,0.35); }
+  .an-head { display: flex; align-items: center; gap: 9px; }
+  .an-name { font-weight: 700; font-size: 0.95rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .an-up { font-family: var(--mono); font-size: 0.72rem; color: var(--text2); flex-shrink: 0; }
+  .an-up b { color: #5fd08b; }
+  .an-metric { display: flex; flex-direction: column; gap: 5px; }
+  .an-metric-top { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.72rem; color: var(--text2); }
+  .an-metric-top .v { color: var(--text); font-weight: 600; }
+  .an-bar { height: 6px; border-radius: 4px; background: var(--surface3); overflow: hidden; }
+  .an-bar span { display: block; height: 100%; border-radius: 4px; background: var(--green); transition: width 0.4s; }
+  .an-bar span.warn { background: var(--orange); }
+  .an-bar span.crit { background: var(--red); }
+  .an-foot { display: flex; gap: 14px; font-family: var(--mono); font-size: 0.68rem; color: var(--dim); flex-wrap: wrap; }
+  .an-foot b { color: var(--text2); font-weight: 600; }
+  .an-down-msg { font-family: var(--mono); font-size: 0.72rem; color: var(--red); word-break: break-word; }
+  .an-h2 { font-size: 1.02rem; font-weight: 700; margin: 0 0 12px; }
+  .an-inc { display: flex; align-items: center; gap: 11px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+  .an-inc:last-child { border-bottom: none; }
+  .an-inc .an-inc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .an-inc.up .an-inc-dot { background: #5fd08b; }
+  .an-inc.down .an-inc-dot { background: var(--red); }
+  .an-inc-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .an-inc-state { font-family: var(--mono); font-size: 0.72rem; }
+  .an-inc.up .an-inc-state { color: #5fd08b; }
+  .an-inc.down .an-inc-state { color: var(--red); }
+  .an-inc-time { font-family: var(--mono); font-size: 0.68rem; color: var(--dim); flex-shrink: 0; }
   .dash-sec {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     margin: 0 0 12px;
@@ -1093,15 +1146,15 @@
     <div class="dash-wrap">
       <h1 class="dash-title">Your servers</h1>
       <p class="dash-sub">Every box you manage, one place. Tap a server to work on it.</p>
-      <div class="dash-stats" aria-label="Fleet overview">
-        <div class="stat"><div class="stat-n" id="statServers">–</div><div class="stat-l">servers</div></div>
-        <div class="stat"><div class="stat-n" id="statOnline">–</div><div class="stat-l">online</div></div>
-        <div class="stat"><div class="stat-n" id="statScreens">–</div><div class="stat-l">screens running</div></div>
-      </div>
+      <a class="dash-summary" href="#/analytics" id="dashSummary" aria-label="Open analytics">
+        <span id="sumLine">loading fleet status…</span>
+        <span class="dash-summary-go">analytics &#8594;</span>
+      </a>
       <div class="dash-sec">
         <h2>Servers</h2>
         <input id="srvSearch" class="dash-search" type="search" placeholder="search servers..."
           oninput="filterServers(this.value)" aria-label="Search servers" autocomplete="off">
+        <a class="dash-add-top" href="#/analytics">analytics</a>
         <a class="dash-add-top" href="#/keys">ssh keys</a>
         <button type="button" class="dash-add-top" id="addServerBtn" onclick="openServerForm()">+ add server</button>
       </div>
@@ -1169,6 +1222,28 @@
           <button type="submit" class="sf-btn primary" id="kfSave">save key</button>
         </div>
       </form>
+    </div>
+  </section>
+
+  <!-- ── Analytics / monitoring ─────────────────────── -->
+  <section class="view" id="view-analytics">
+    <div class="dash-wrap">
+      <h1 class="dash-title">Analytics</h1>
+      <p class="dash-sub">Live health and load across your fleet. Uptime is tracked continuously.</p>
+      <div class="dash-sec">
+        <a class="dash-add-top" href="#/servers">&#8592; servers</a>
+        <span style="flex:1"></span>
+        <button type="button" class="dash-add-top" onclick="loadAnalytics()" aria-label="Refresh analytics">&#8635; refresh</button>
+      </div>
+      <div class="dash-stats" id="anSummary" aria-label="Fleet overview">
+        <div class="stat"><div class="stat-n" id="statServers">–</div><div class="stat-l">servers</div></div>
+        <div class="stat" id="statOfflineCard"><div class="stat-n" id="statOffline">–</div><div class="stat-l">offline</div></div>
+        <div class="stat"><div class="stat-n" id="statActive">–</div><div class="stat-l">active sessions</div></div>
+        <div class="stat"><div class="stat-n" id="statAvgLoad">–</div><div class="stat-l">avg cpu load</div></div>
+      </div>
+      <div class="an-grid" id="anGrid"></div>
+      <h2 class="an-h2">Recent activity</h2>
+      <div class="dash-list" id="anIncidents"><div class="dash-empty" id="anIncEmpty">No status changes recorded yet.</div></div>
     </div>
   </section>
 
@@ -1470,7 +1545,10 @@
     socket.on('servers:test',(res)=>{
       showToast(res.online?('reachable — '+(res.screens||0)+' screens'):('unreachable: '+(res.error||'ssh failed')));
     });
+    socket.on('analytics:data',renderAnalytics);
   }
+
+  function loadAnalytics(){ if(socket&&connected)socket.emit('analytics:get'); }
 
   // ── Latency ─────────────────────────────────────────
   function startLatencyPing(){stopLatencyPing();measureLatency();latencyInterval=setInterval(measureLatency,15000);}
@@ -1497,6 +1575,7 @@
     if(parts[0]==='screens'&&parts[1]==='add'&&parts[2]) return {view:'screens',server:'local',sessions:dec(parts[2]),add:true};
     if(parts[0]==='screens') return {view:'screens',server:'local',sessions:[],add:false};
     if(parts[0]==='keys') return {view:'keys',server:null,sessions:[],add:false};
+    if(parts[0]==='analytics') return {view:'analytics',server:null,sessions:[],add:false};
     if(parts[0]==='srv'&&parts[1]){
       const srv=decodeURIComponent(parts[1]);
       if(parts[2]==='chat') return {view:'chat',server:srv,sessions:[],add:false};
@@ -1538,6 +1617,7 @@
     }
     $('view-servers').classList.toggle('active',r.view==='servers');
     $('view-keys').classList.toggle('active',r.view==='keys');
+    $('view-analytics').classList.toggle('active',r.view==='analytics');
     $('view-screens').classList.toggle('active',r.view==='screens');
     $('view-term').classList.toggle('active',r.view==='term');
     $('view-chat').classList.toggle('active',r.view==='chat');
@@ -1549,7 +1629,11 @@
       if(connected)socket.emit('init',{serverId:r.server});
     }
 
-    if(r.view==='servers'||r.view==='keys'){
+    if(r.view==='analytics'){
+      syncPanes([]);
+      if(connected){socket.emit('servers:list');loadAnalytics();}
+      document.title='termi — analytics';
+    } else if(r.view==='servers'||r.view==='keys'){
       syncPanes([]);
       if(connected)socket.emit('servers:list');
       document.title=r.view==='keys'?'termi — ssh keys':'termi — servers';
@@ -1600,7 +1684,8 @@
   function startScreenRefresh(){
     stopScreenRefresh();
     screenRefreshInterval=setInterval(()=>{
-      if(route.view==='servers'||route.view==='keys')socket.emit('servers:list');
+      if(route.view==='analytics')loadAnalytics();
+      else if(route.view==='servers'||route.view==='keys')socket.emit('servers:list');
       else if(route.view!=='chat')loadScreenSessions();
     },5000);
   }
@@ -1767,13 +1852,100 @@
     return card;
   }
 
+  // Compact fleet-status line on the dashboard (the big cards live on the
+  // analytics page now).
   function updateDashStats(){
     const ids=['local',...servers.map(s=>s.id)];
     const known=ids.map(id=>serverStatus[id]).filter(Boolean);
-    const probing=known.length<ids.length;
-    $('statServers').textContent=ids.length;
-    $('statOnline').textContent=known.filter(s=>s.online).length+(probing?'+':'');
-    $('statScreens').textContent=known.reduce((n,s)=>n+(s.screens||0),0)+(probing?'+':'');
+    const checking=known.length<ids.length;
+    const offline=known.filter(s=>s.online===false).length;
+    const active=known.reduce((n,s)=>n+(s.attached||0),0);
+    const el=$('sumLine');
+    if(el){
+      const parts=[ids.length+' server'+(ids.length===1?'':'s')];
+      parts.push(offline>0?`<span class="sum-down">${offline} offline</span>`:'all online');
+      parts.push(active+' active session'+(active===1?'':'s'));
+      el.innerHTML=parts.join(' · ')+(checking?' …':'');
+    }
+  }
+
+  // ── Analytics page ──────────────────────────────────
+  function fmtUptime(sec){
+    if(!sec)return '–';
+    const d=Math.floor(sec/86400), h=Math.floor(sec%86400/3600), m=Math.floor(sec%3600/60);
+    if(d)return d+'d '+h+'h';
+    if(h)return h+'h '+m+'m';
+    return m+'m';
+  }
+  function fmtGb(kb){ return kb?(kb/1048576).toFixed(kb>=104857600?0:1)+'G':'–'; }
+  function ago(t){
+    if(!t)return '';
+    const s=Math.floor((Date.now()-t)/1000);
+    if(s<60)return s+'s ago';
+    if(s<3600)return Math.floor(s/60)+'m ago';
+    if(s<86400)return Math.floor(s/3600)+'h ago';
+    return Math.floor(s/86400)+'d ago';
+  }
+  function barClass(pct){ return pct>=90?'crit':pct>=70?'warn':''; }
+  function metricBar(label,pct,valText){
+    const p=pct==null?0:pct;
+    return `<div class="an-metric">
+      <div class="an-metric-top"><span>${label}</span><span class="v">${valText}</span></div>
+      <div class="an-bar"><span class="${barClass(p)}" style="width:${Math.min(100,p)}%"></span></div>
+    </div>`;
+  }
+
+  function renderAnalytics({rows,incidents}){
+    // Summary cards
+    const offline=rows.filter(r=>!r.online).length;
+    const active=rows.reduce((n,r)=>n+(r.attached||0),0);
+    const loads=rows.filter(r=>r.online&&r.metrics&&r.metrics.loadPct!=null).map(r=>r.metrics.loadPct);
+    const avgLoad=loads.length?Math.round(loads.reduce((a,b)=>a+b,0)/loads.length):null;
+    $('statServers').textContent=rows.length;
+    $('statOffline').textContent=offline;
+    $('statOfflineCard').classList.toggle('alert',offline>0);
+    $('statActive').textContent=active;
+    $('statAvgLoad').textContent=avgLoad==null?'–':avgLoad+'%';
+
+    // Per-server metric cards
+    const grid=$('anGrid');
+    grid.innerHTML=rows.map(r=>{
+      const up=r.uptime||{};
+      const upPct=up.uptimePct==null?'':`<span class="an-up">uptime <b>${up.uptimePct}%</b></span>`;
+      if(!r.online){
+        return `<div class="an-card down">
+          <div class="an-head"><span class="srv-dot off"></span><span class="an-name">${escHtml(r.name)}</span>${up.lastOnline?`<span class="an-up">seen ${ago(up.lastOnline)}</span>`:''}</div>
+          <div class="an-down-msg">${escHtml(r.error||'unreachable')}</div>
+          ${up.uptimePct!=null?`<div class="an-foot"><span>uptime <b>${up.uptimePct}%</b></span></div>`:''}
+        </div>`;
+      }
+      const m=r.metrics||{};
+      return `<div class="an-card">
+        <div class="an-head"><span class="srv-dot on"></span><span class="an-name">${escHtml(r.name)}</span>${upPct}</div>
+        ${metricBar('cpu load'+(m.load?' ('+m.load[0].toFixed(2)+')':''),m.loadPct,(m.loadPct==null?'–':m.loadPct+'%'))}
+        ${metricBar('memory',m.memPct,(m.memPct==null?'–':m.memPct+'% · '+fmtGb(m.memUsedKb)+'/'+fmtGb(m.memTotalKb)))}
+        ${metricBar('disk /',m.diskPct,(m.diskPct==null?'–':m.diskPct+'% · '+fmtGb(m.diskUsedKb)+'/'+fmtGb(m.diskTotalKb)))}
+        <div class="an-foot">
+          <span>up <b>${fmtUptime(m.uptimeSec)}</b></span>
+          <span><b>${r.screens}</b> screen${r.screens===1?'':'s'}</span>
+          <span><b>${r.attached}</b> active</span>
+          ${m.cpus?`<span><b>${m.cpus}</b> cpu${m.cpus===1?'':'s'}</span>`:''}
+        </div>
+      </div>`;
+    }).join('');
+
+    // Incidents
+    const inc=$('anIncidents');
+    if(!incidents||!incidents.length){
+      inc.innerHTML='<div class="dash-empty" id="anIncEmpty">No status changes recorded yet.</div>';
+    } else {
+      inc.innerHTML=incidents.map(e=>`<div class="an-inc ${e.online?'up':'down'}">
+        <span class="an-inc-dot"></span>
+        <span class="an-inc-name">${escHtml(e.name)}</span>
+        <span class="an-inc-state">${e.online?'came online':'went offline'}</span>
+        <span class="an-inc-time">${ago(e.t)}</span>
+      </div>`).join('');
+    }
   }
 
   // Client-side search over name/host/user — a 100+ fleet needs filtering,

@@ -9,6 +9,7 @@ const os = require('os');
 
 const registry = require('./lib/registry');
 const remote = require('./lib/remote');
+const monitor = require('./lib/monitor');
 
 const execAsync = util.promisify(exec);
 
@@ -399,6 +400,60 @@ function resizeScreenPty(socket, serverId, sessionName, cols, rows) {
   if (entry) entry.handle.resize(cols, rows);
 }
 
+// ── Metrics (analytics page) ──────────────────────────
+// One /proc-based command, no awk, so quoting stays trivial over SSH.
+const METRICS_CMD = [
+  'echo "===LOADAVG==="; cat /proc/loadavg 2>/dev/null',
+  'echo "===NPROC==="; nproc 2>/dev/null',
+  'echo "===MEMINFO==="; grep -E "^(MemTotal|MemAvailable):" /proc/meminfo 2>/dev/null',
+  'echo "===DF==="; df -Pk / 2>/dev/null',
+  'echo "===UPTIME==="; cat /proc/uptime 2>/dev/null',
+].join('; ');
+
+function parseMetrics(out) {
+  const sec = {};
+  let cur = null;
+  for (const line of out.split('\n')) {
+    const m = line.match(/^===(\w+)===$/);
+    if (m) { cur = m[1]; sec[cur] = []; continue; }
+    if (cur) sec[cur].push(line);
+  }
+  const load = ((sec.LOADAVG || [])[0] || '').trim().split(/\s+/).slice(0, 3).map(Number);
+  const cpus = parseInt((sec.NPROC || [])[0], 10) || 1;
+  let memTotal = 0, memAvail = 0;
+  for (const l of sec.MEMINFO || []) {
+    const mm = l.match(/^(MemTotal|MemAvailable):\s+(\d+)/);
+    if (mm) { if (mm[1] === 'MemTotal') memTotal = +mm[2]; else memAvail = +mm[2]; }
+  }
+  const df = (((sec.DF || [])[1]) || '').trim().split(/\s+/); // fs 1k-blocks used avail cap mount
+  const diskTotal = +df[1] || 0, diskUsed = +df[2] || 0;
+  const uptimeSec = Math.floor(parseFloat(((sec.UPTIME || [])[0] || '0').split(/\s+/)[0]) || 0);
+  return {
+    load, cpus,
+    loadPct: cpus ? Math.min(100, Math.round((load[0] / cpus) * 100)) : null,
+    memTotalKb: memTotal, memUsedKb: Math.max(0, memTotal - memAvail),
+    memPct: memTotal ? Math.round((1 - memAvail / memTotal) * 100) : null,
+    diskTotalKb: diskTotal, diskUsedKb: diskUsed,
+    diskPct: diskTotal ? Math.round((diskUsed / diskTotal) * 100) : null,
+    uptimeSec,
+  };
+}
+
+const metricsCache = new Map();
+async function gatherMetrics(serverId) {
+  const c = metricsCache.get(serverId);
+  if (c && Date.now() - c.t < 15000) return c.m;
+  let m = null;
+  try {
+    const out = serverId === LOCAL_ID
+      ? (await execAsync(METRICS_CMD, { timeout: 8000, shell: '/bin/bash' })).stdout
+      : (await remote.execOnServer(serverId, METRICS_CMD, { timeout: 12000 })).stdout;
+    m = parseMetrics(out);
+  } catch (_) { m = null; }
+  metricsCache.set(serverId, { t: Date.now(), m });
+  return m;
+}
+
 // ── Server probing (dashboard status dots) ────────────
 const probeCache = new Map(); // serverId → { t, result }
 const PROBE_TTL = 20000;
@@ -418,7 +473,8 @@ async function probeAndEmit(serverId, force) {
     ]);
     result = {
       online: true, hasScreen: true, hasClaude: claudeAvail, hasAgent: agentAvail,
-      screens: sessions.length, sessions: sessions.slice(0, 16),
+      screens: sessions.length, attached: sessions.filter(s => s.status === 'attached').length,
+      sessions: sessions.slice(0, 16),
     };
   } else {
     const probe = await remote.probeServer(serverId);
@@ -429,6 +485,7 @@ async function probeAndEmit(serverId, force) {
       hasClaude: !!probe.hasClaude,
       hasAgent: !!probe.hasAgent,
       screens: sessions.length,
+      attached: sessions.filter(s => s.status === 'attached').length,
       sessions: sessions.slice(0, 16),
       error: probe.error,
     };
@@ -640,6 +697,24 @@ io.on('connection', (socket) => {
     for (const s of registry.listServers()) probeAndEmit(s.id).catch(() => {});
   });
 
+  // ── Analytics page ─────────────────────────────────
+  socket.on('analytics:get', async () => {
+    const list = [{ id: LOCAL_ID, name: 'this server', local: true }, ...registry.listServers()];
+    const names = {}; list.forEach(s => { names[s.id] = s.name; });
+    const rows = await Promise.all(list.map(async (s) => {
+      let probe = {};
+      try { probe = await probeAndEmit(s.id); } catch (_) { probe = { online: false }; }
+      const metrics = probe.online ? await gatherMetrics(s.id) : null;
+      return {
+        id: s.id, name: s.name, local: !!s.local,
+        online: !!probe.online, error: probe.error,
+        screens: probe.screens || 0, attached: probe.attached || 0,
+        metrics, uptime: monitor.stats(s.id),
+      };
+    }));
+    socket.emit('analytics:data', { rows, incidents: monitor.incidents(names), ts: Date.now() });
+  });
+
   socket.on('servers:add', (input) => {
     try {
       let keyId = input.keyId;
@@ -673,6 +748,8 @@ io.on('connection', (socket) => {
     try {
       registry.removeServer(id);
       probeCache.delete(id);
+      metricsCache.delete(id);
+      monitor.forget(id);
       chats.delete(id);
       io.emit('servers:list', serverListPayload());
     } catch (err) {
@@ -726,15 +803,33 @@ io.on('connection', (socket) => {
   });
 });
 
+// ── Background uptime monitor ─────────────────────────────
+// Samples every server's reachability on an interval so downtime and
+// uptime % accrue even when no dashboard is open.
+function startMonitor() {
+  const tick = async () => {
+    const ids = [LOCAL_ID, ...registry.listServers().map(s => s.id)];
+    for (const id of ids) {
+      let online = false;
+      try { online = !!(await probeAndEmit(id)).online; } catch (_) { online = false; }
+      monitor.record(id, online, Date.now());
+    }
+  };
+  tick().catch(() => {});
+  return setInterval(() => tick().catch(() => {}), 60000);
+}
+
 // ── Start server ─────────────────────────────────────────
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Agent UI on port ${PORT} | workdir: ${WORK_DIR}`));
+  startMonitor();
 }
 
 // ── Exports for testing ──────────────────────────────────
 module.exports = {
   app, server, io,
   parseScreenLs,
+  parseMetrics,
   listScreenSessions,
   screenPtys,
   spawnRunner,
