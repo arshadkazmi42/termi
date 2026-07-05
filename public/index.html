@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0b0b0f">
+<meta name="theme-color" content="#0a0a0c">
 <link rel="manifest" href="/manifest.json">
 <title>termi</title>
 <script src="/socket.io/socket.io.js"></script>
@@ -14,33 +14,36 @@
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&f[]=clash-display@600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:         #0b0b0f;
-    --bg2:        #0e0e14;
-    --surface:    #13131a;
-    --surface2:   #1a1a24;
-    --surface3:   #22222e;
-    --border:     #1f1f2e;
-    --border-hi:  #2d2d3f;
-    --green:      #22dd88;
-    --green-dim:  rgba(34,221,136,0.08);
-    --green-mid:  rgba(34,221,136,0.15);
-    --green-glow: rgba(34,221,136,0.25);
+    --bg:         #0a0a0c;
+    --bg2:        #0c0c10;
+    --surface:    #111116;
+    --surface2:   #17171d;
+    --surface3:   #1f1f27;
+    --border:     rgba(255,255,255,0.08);
+    --border-hi:  rgba(255,255,255,0.2);
+    --green:      #6e72f0;
+    --green-dim:  rgba(110,114,240,0.08);
+    --green-mid:  rgba(110,114,240,0.15);
+    --green-glow: rgba(110,114,240,0.25);
     --blue:       #6ba1ff;
     --blue-dim:   rgba(107,161,255,0.08);
-    --red:        #ff6b6b;
-    --red-dim:    rgba(255,107,107,0.08);
-    --orange:     #ffb347;
-    --orange-dim: rgba(255,179,71,0.08);
+    --red:        #f0746a;
+    --red-dim:    rgba(240,116,106,0.08);
+    --orange:     #febc2e;
+    --orange-dim: rgba(254,188,46,0.08);
     --purple:     #c084fc;
     --cyan:       #22d3ee;
-    --text:       #e8e8ef;
-    --text2:      #a0a0b8;
-    --dim:        #555568;
+    --text:       #f4f5f7;
+    --text2:      #8a8d99;
+    --dim:        #5a5d68;
     --mono:       'JetBrains Mono', 'SF Mono', monospace;
-    --sans:       'Inter', -apple-system, sans-serif;
+    --sans:       'Satoshi', 'Inter', -apple-system, sans-serif;
+    --display:    'Clash Display', 'Satoshi', sans-serif;
     --r:          14px;
     --r-sm:       10px;
     --r-lg:       18px;
@@ -76,9 +79,9 @@
 
   .splash-icon {
     width: 80px; height: 80px; border-radius: 22px;
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
     display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-weight: 700; font-size: 32px; color: #000;
+    font-family: var(--mono); font-weight: 700; font-size: 32px; color: #fff;
     box-shadow: 0 0 60px var(--green-glow), 0 0 120px var(--green-dim);
     animation: sPulse 2s ease-in-out infinite;
   }
@@ -138,9 +141,9 @@
   .auth-head { display: flex; align-items: center; gap: 12px; }
   .auth-icon {
     width: 44px; height: 44px; border-radius: 12px;
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
     display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-weight: 700; font-size: 18px; color: #000;
+    font-family: var(--mono); font-weight: 700; font-size: 18px; color: #fff;
   }
   .auth-title { font-family: var(--mono); font-size: 20px; font-weight: 600; }
   .auth-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
@@ -154,37 +157,54 @@
   }
   .auth-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
   .auth-btn {
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
-    color: #000; border: none; border-radius: var(--r-sm);
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
+    color: #fff; border: none; border-radius: var(--r-sm);
     padding: 13px; font-family: var(--mono); font-size: 13px; font-weight: 700;
     cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px;
   }
   .auth-btn:active { transform: scale(0.98); opacity: 0.9; }
   .auth-error { font-family: var(--mono); font-size: 11px; color: var(--red); min-height: 14px; }
 
-  /* ── App ─────────────────────────────────────────── */
+  /* ── App (full-width dashboard shell; views set their own widths) ── */
   #app {
     display: flex; flex-direction: column;
-    height: 100%; height: 100dvh; max-width: 800px; margin: 0 auto;
+    height: 100%; height: 100dvh;
   }
+  /* Chat reads best as a column; terminal + dashboard use the full width */
+  #view-chat.active { width: 100%; max-width: 900px; margin: 0 auto; }
 
   /* ── Header (logo + tab links + status + menu) ──── */
   .header {
-    display: flex; align-items: center; padding: 8px 14px;
+    display: flex; align-items: center; padding: 8px clamp(14px, 4vw, 42px);
     padding-top: calc(8px + var(--safe-t));
-    background: rgba(19,19,26,0.75); backdrop-filter: blur(20px) saturate(1.2);
+    background: rgba(12,12,16,0.72); backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
-    border-bottom: 1px solid rgba(31,31,46,0.6);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0; gap: 10px; position: relative; z-index: 10;
+  }
+  @media (hover: hover) {
+    .tab:hover { color: var(--text); }
+    .tab.active:hover { color: var(--green); }
   }
   .h-logo {
     width: 32px; height: 32px; border-radius: 9px;
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
     display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-weight: 700; font-size: 13px; color: #000;
-    flex-shrink: 0;
+    font-family: var(--mono); font-weight: 700; font-size: 13px; color: #fff;
+    flex-shrink: 0; text-decoration: none;
   }
-  .h-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
+  .h-word {
+    font-weight: 700; font-size: 1rem; color: var(--text);
+    text-decoration: none; margin-right: auto; flex-shrink: 0;
+  }
+  /* Server context (name + screens/chat tabs) — only shown inside a server */
+  .h-ctx { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .h-crumb { color: var(--dim); font-family: var(--mono); flex-shrink: 0; }
+  .h-srv {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text2);
+    max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .h-tabs { display: flex; gap: 4px; min-width: 0; }
   .tab {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 7px 12px; font-family: var(--mono); font-size: 12px; font-weight: 500;
@@ -278,7 +298,7 @@
     color: var(--dim); background: none; border: none; border-radius: 6px;
     cursor: pointer; transition: all 0.15s;
   }
-  .agent-btn.active { background: var(--green); color: #000; font-weight: 700; }
+  .agent-btn.active { background: var(--green); color: #fff; font-weight: 700; }
   .agent-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
   /* ── Queue ──────────────────────────────────────── */
@@ -290,7 +310,7 @@
   }
   .queue-bar.on { display: flex; }
   .queue-n {
-    background: var(--green); color: #000; border-radius: 4px;
+    background: var(--green); color: #fff; border-radius: 4px;
     padding: 0 6px; font-weight: 700; font-size: 10px;
   }
 
@@ -339,7 +359,7 @@
     opacity: 0; transition: opacity 0.15s;
   }
   .cmd-output:hover .copy-btn { opacity: 1; }
-  .cmd-output .copy-btn:active { background: var(--green); color: #000; border-color: var(--green); }
+  .cmd-output .copy-btn:active { background: var(--green); color: #fff; border-color: var(--green); }
 
   .cmd-expand {
     padding: 0 14px 8px; font-family: var(--mono); font-size: 11px;
@@ -457,8 +477,8 @@
   .prompt-ta::placeholder { color: var(--dim); }
   .prompt-send {
     width: 38px; height: 38px; border-radius: 10px;
-    background: linear-gradient(135deg, #22dd88, #1aaf6a);
-    border: none; color: #000; font-size: 16px; font-weight: 700;
+    background: linear-gradient(135deg, #6e72f0, #5a5ed6);
+    border: none; color: #fff; font-size: 16px; font-weight: 700;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     flex-shrink: 0; transition: all 0.15s; font-family: var(--mono);
   }
@@ -490,40 +510,23 @@
   }
   .scr-refresh:active { color: var(--green); transform: scale(0.94); }
 
-  #screenSessionList {
-    flex: 1; overflow-y: auto; padding: 6px 14px 14px;
-    display: flex; flex-direction: column; gap: 8px;
-    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  }
-  #screenSessionList::-webkit-scrollbar { width: 3px; }
-  #screenSessionList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-  /* Session cards — real links so navigation works for everything:
-     humans, el.click(), synthetic events, assistive tech, AI agents. */
+  /* Session rows — real links so navigation works for everything:
+     humans, el.click(), synthetic events, assistive tech, AI agents.
+     Same list language as the dashboard. */
   .scr-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--r); padding: 14px 16px; cursor: pointer;
-    transition: all 0.15s; display: flex; align-items: center; gap: 14px;
-    animation: blockIn 0.2s ease; position: relative; overflow: hidden;
-    width: 100%; text-align: left; font: inherit; color: inherit;
-    text-decoration: none; flex-shrink: 0;
+    display: flex; align-items: center; gap: 12px;
+    padding: 15px 16px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.12s;
+    color: inherit; text-decoration: none;
   }
-  .scr-card::after {
-    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-    border-radius: 0 2px 2px 0;
+  .scr-card:last-child { border-bottom: none; }
+  .scr-card:active { background: var(--surface2); }
+  @media (hover: hover) {
+    .scr-card:hover { background: rgba(255,255,255,0.03); }
   }
-  .scr-card.live::after { background: var(--green); }
-  .scr-card.idle::after { background: var(--orange); }
-  .scr-card:active { background: var(--surface2); transform: scale(0.98); }
-  .scr-card.back-chip { justify-content: center; gap: 8px; }
-
-  .scr-icon {
-    width: 40px; height: 40px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--mono); font-size: 16px; font-weight: 700; flex-shrink: 0;
-  }
-  .scr-icon.live { background: var(--green-dim); color: var(--green); }
-  .scr-icon.idle { background: var(--orange-dim); color: var(--orange); }
+  .srv-dot.idle-dot { background: var(--orange); }
+  #screenSessionList .skel-card { border: none; border-bottom: 1px solid var(--border); border-radius: 0; margin: 0; }
+  #screenSessionList .skel-card:last-child { border-bottom: none; }
 
   .scr-info { flex: 1; min-width: 0; }
   .scr-name {
@@ -599,7 +602,7 @@
     display: inline-flex; align-items: center; gap: 5px; transition: all 0.1s;
     text-decoration: none; flex-shrink: 0;
   }
-  .stv-back:active { background: var(--green); color: #000; }
+  .stv-back:active { background: var(--green); color: #fff; }
   .stv-name {
     font-family: var(--mono); font-size: 13px; font-weight: 600; flex: 1;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
@@ -645,7 +648,7 @@
     width: 22px; height: 22px; border-radius: 6px; cursor: pointer; flex-shrink: 0;
     font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
   }
-  .scr-pane-close:active { background: var(--red); color: #000; }
+  .scr-pane-close:active { background: var(--red); color: #fff; }
   .scr-pane-term { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 1px; }
 
   /* Terminal input bar — always visible, plain form: works for humans,
@@ -669,7 +672,7 @@
     font-weight: 600; border-radius: 8px; cursor: pointer; padding: 0 12px;
     transition: all 0.1s;
   }
-  .stv-input-send.primary { background: linear-gradient(135deg, #22dd88, #1aaf6a); color: #000; border-color: transparent; }
+  .stv-input-send.primary { background: linear-gradient(135deg, #6e72f0, #5a5ed6); color: #fff; border-color: transparent; }
   .stv-input-send:active { transform: scale(0.96); }
 
   /* Special-keys bar — always visible in the terminal view */
@@ -689,7 +692,7 @@
     display: inline-flex; align-items: center; justify-content: center;
     padding: 0 10px; transition: all 0.1s; user-select: none;
   }
-  .stv-key:active { background: var(--green); color: #000; transform: scale(0.94); }
+  .stv-key:active { background: var(--green); color: #fff; transform: scale(0.94); }
   .stv-key.kbd { color: var(--green); }
 
   /* iOS Safari auto-zooms the page when a focused input's font is under
@@ -728,7 +731,7 @@
     box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   }
   #app.term-fs .term-fs-exit { display: inline-flex; }
-  .term-fs-exit:active { opacity: 1; background: var(--green); color: #000; }
+  .term-fs-exit:active { opacity: 1; background: var(--green); color: #fff; }
 
   /* ── Scroll-to-bottom FAB ────────────────────────── */
   .scroll-fab {
@@ -741,8 +744,257 @@
     font-family: var(--mono);
   }
   .scroll-fab.visible { display: flex; animation: fabIn 0.2s ease; }
-  .scroll-fab:active { transform: scale(0.9); background: var(--green); color: #000; }
+  .scroll-fab:active { transform: scale(0.9); background: var(--green); color: #fff; }
   @keyframes fabIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+
+  /* ── Servers dashboard (ireel-style) ────────────── */
+  .dash-wrap {
+    flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; width: 100%;
+    max-width: 1000px; margin: 0 auto;
+    padding: clamp(20px, 4vw, 44px) clamp(16px, 3vw, 32px) calc(32px + var(--safe-b));
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin; scrollbar-color: var(--border-hi) transparent;
+    scrollbar-gutter: stable;
+  }
+  .dash-wrap::-webkit-scrollbar { width: 6px; }
+  .dash-wrap::-webkit-scrollbar-track { background: transparent; }
+  .dash-wrap::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 6px; }
+  .dash-wrap::-webkit-scrollbar-thumb:hover { background: var(--text2); }
+  .dash-title {
+    font-family: var(--display); font-size: clamp(1.6rem, 3.2vw, 2.15rem); font-weight: 600;
+    letter-spacing: -0.02em; margin: 4px 0 6px;
+  }
+  .dash-sub { color: var(--text2); font-size: 0.94rem; margin-bottom: 22px; }
+  .dash-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin-bottom: 26px; max-width: 720px;
+  }
+  .stat {
+    border: 1px solid var(--border); border-radius: 13px; background: var(--surface);
+    padding: 14px 16px; transition: border-color 0.2s, background 0.2s;
+  }
+  /* Offline card lights up red only when something's actually down */
+  .stat.alert { border-color: rgba(240,116,106,0.5); background: var(--red-dim); }
+  .stat.alert .stat-n { color: var(--red); }
+  .stat.alert .stat-l { color: var(--red); opacity: 0.85; }
+  .stat-n { font-family: var(--display); font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }
+  .stat-n .stat-hint { font-size: 0.8rem; color: var(--dim); font-family: var(--mono); margin-left: 4px; }
+  .stat-l {
+    font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: 1.4px; color: var(--dim); margin-top: 3px;
+  }
+  @media (max-width: 560px) { .dash-stats { grid-template-columns: repeat(2, 1fr); } }
+
+  /* Compact fleet-status pill on the dashboard, links to analytics */
+  .dash-summary {
+    display: flex; align-items: center; gap: 12px; justify-content: space-between;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+    padding: 11px 15px; margin-bottom: 22px; text-decoration: none; color: var(--text2);
+    font-size: 0.88rem; transition: border-color 0.12s;
+  }
+  .dash-summary .dash-summary-go { color: var(--green); font-weight: 600; font-size: 0.82rem; flex-shrink: 0; }
+  @media (hover: hover) { .dash-summary:hover { border-color: var(--border-hi); } }
+  .sum-down { color: var(--red); font-weight: 700; }
+
+  /* Analytics per-server metric cards */
+  .an-grid {
+    display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 30px;
+  }
+  @media (min-width: 680px) { .an-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1040px) { .an-grid { grid-template-columns: repeat(3, 1fr); } }
+  .an-card {
+    border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+    padding: 15px 16px; display: flex; flex-direction: column; gap: 11px;
+  }
+  .an-card.down { border-color: rgba(240,116,106,0.35); }
+  .an-head { display: flex; align-items: center; gap: 9px; }
+  .an-name { font-weight: 700; font-size: 0.95rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .an-up { font-family: var(--mono); font-size: 0.72rem; color: var(--text2); flex-shrink: 0; }
+  .an-up b { color: #5fd08b; }
+  .an-metric { display: flex; flex-direction: column; gap: 5px; }
+  .an-metric-top { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.72rem; color: var(--text2); }
+  .an-metric-top .v { color: var(--text); font-weight: 600; }
+  .an-bar { height: 6px; border-radius: 4px; background: var(--surface3); overflow: hidden; }
+  .an-bar span { display: block; height: 100%; border-radius: 4px; background: var(--green); transition: width 0.4s; }
+  .an-bar span.warn { background: var(--orange); }
+  .an-bar span.crit { background: var(--red); }
+  .an-foot { display: flex; gap: 14px; font-family: var(--mono); font-size: 0.68rem; color: var(--dim); flex-wrap: wrap; }
+  .an-foot b { color: var(--text2); font-weight: 600; }
+  .an-down-msg { font-family: var(--mono); font-size: 0.72rem; color: var(--red); word-break: break-word; }
+  .an-h2 { font-size: 1.02rem; font-weight: 700; margin: 0 0 12px; }
+  .an-inc { display: flex; align-items: center; gap: 11px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+  .an-inc:last-child { border-bottom: none; }
+  .an-inc .an-inc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .an-inc.up .an-inc-dot { background: #5fd08b; }
+  .an-inc.down .an-inc-dot { background: var(--red); }
+  .an-inc-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .an-inc-state { font-family: var(--mono); font-size: 0.72rem; }
+  .an-inc.up .an-inc-state { color: #5fd08b; }
+  .an-inc.down .an-inc-state { color: var(--red); }
+  .an-inc-time { font-family: var(--mono); font-size: 0.68rem; color: var(--dim); flex-shrink: 0; }
+  .dash-sec {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 0 0 12px;
+  }
+  .dash-sec h2 { font-size: 1.02rem; font-weight: 700; margin-right: auto; }
+  .dash-search {
+    flex: 0 1 260px; min-width: 150px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 9px;
+    color: var(--text); font-family: var(--mono); font-size: 16px;
+    padding: 8px 12px; outline: none;
+  }
+  .dash-search:focus { border-color: var(--green); }
+  .dash-search::placeholder { color: var(--dim); }
+  @media (max-width: 560px) {
+    .dash-search { order: 5; flex: 1 1 100%; }
+  }
+  .dash-add-top {
+    font-size: 0.85rem; font-weight: 600; color: var(--text);
+    background: none; border: 1px solid var(--border); border-radius: 9px;
+    padding: 8px 14px; cursor: pointer; font-family: var(--sans);
+    text-decoration: none; display: inline-flex; align-items: center;
+  }
+  .dash-list {
+    border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; background: var(--surface);
+  }
+  .dash-empty { padding: 26px 20px; text-align: center; color: var(--text2); font-size: 0.9rem; border-top: 1px solid var(--border); }
+  /* Server cards — responsive grid: 1 col on phone, 2-3 on wider screens */
+  .srv-grid {
+    display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch;
+  }
+  @media (min-width: 620px) { .srv-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1000px) { .srv-grid { grid-template-columns: repeat(3, 1fr); } }
+  .srv-card {
+    display: flex; flex-direction: column;
+    padding: 15px 16px; border: 1px solid var(--border); border-radius: 14px;
+    background: var(--surface); cursor: pointer; transition: border-color 0.12s, background 0.12s;
+    min-width: 0;
+  }
+  .srv-card-head { display: flex; align-items: center; gap: 9px; }
+  .srv-card .srv-name { flex: 1; min-width: 0; }
+  .srv-card .srv-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .srv-card .srv-sub { margin-top: 7px; }
+  .srv-card .srv-acts { margin-top: auto; padding-top: 14px; }
+  .srv-card .srv-open { flex: 1; text-align: center; }
+  /* Old row list only applies to the keys page now */
+  .srv-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 18px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.12s;
+  }
+  .srv-row:last-of-type { border-bottom: none; }
+  @media (hover: hover) {
+    .srv-card:hover { border-color: var(--border-hi); background: var(--surface2); }
+    .srv-row:hover { background: rgba(255,255,255,0.03); }
+    .srv-open:hover { border-color: var(--border-hi); }
+    .srv-icon:hover { color: var(--text); border-color: var(--border-hi); }
+    .srv-icon.del:hover { color: var(--red); border-color: rgba(240,116,106,0.45); }
+    .dash-add:hover, .dash-add-top:hover { color: var(--green); border-color: var(--green); }
+  }
+  .srv-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--dim); }
+  .srv-dot.on  { background: #5fd08b; box-shadow: 0 0 8px rgba(95,208,139,0.5); }
+  .srv-dot.off { background: var(--red); }
+  .srv-dot.unk { background: var(--dim); animation: srvPulse 1.4s ease-in-out infinite; }
+  @keyframes srvPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .srv-info { flex: 1; min-width: 0; }
+  .srv-name { font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+  .srv-sub {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--text2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;
+  }
+  .srv-err {
+    font-family: var(--mono); font-size: 0.68rem; color: var(--red);
+    margin-top: 4px; word-break: break-word;
+  }
+  .key-ico { font-size: 15px; flex-shrink: 0; opacity: 0.75; }
+  .key-row { cursor: default; }
+  .srv-screens { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+  .srv-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    padding: 4px 11px; border: 1px solid var(--border); border-radius: 16px;
+    color: var(--text2); text-decoration: none; transition: all 0.12s;
+  }
+  .srv-chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .srv-chip.live::before { background: #5fd08b; }
+  .srv-chip.idle::before { background: var(--orange); }
+  @media (hover: hover) {
+    .srv-chip:hover { color: var(--text); border-color: var(--border-hi); background: var(--surface2); }
+  }
+  .srv-badge {
+    font-size: 0.62rem; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0;
+  }
+  .sb-scr   { background: var(--green-mid); color: var(--green); }
+  .sb-off   { background: var(--red-dim); color: var(--red); }
+  .sb-local { background: rgba(255,255,255,0.07); color: var(--text2); }
+  .srv-acts { display: flex; gap: 7px; align-items: center; flex-shrink: 0; }
+  .srv-open {
+    font-size: 0.85rem; font-weight: 600; color: var(--text);
+    border: 1px solid var(--border); padding: 7px 13px; border-radius: 9px;
+    text-decoration: none;
+  }
+  .srv-open:active { border-color: var(--green); color: var(--green); }
+  .srv-icon {
+    background: none; border: 1px solid var(--border); border-radius: 9px;
+    width: 32px; height: 32px; display: inline-flex; align-items: center;
+    justify-content: center; color: var(--text2); cursor: pointer; padding: 0;
+    font-size: 13px;
+  }
+  .srv-icon:active { color: var(--text); border-color: var(--border-hi); }
+  .srv-icon.del:active { color: var(--red); border-color: var(--red); }
+  .dash-add {
+    margin: 14px 0 18px; width: 100%; padding: 13px; border-radius: 12px;
+    border: 1px dashed var(--border-hi); background: none; color: var(--text2);
+    font-family: var(--mono); font-size: 0.85rem; cursor: pointer;
+  }
+  .dash-add:active { color: var(--green); border-color: var(--green); }
+  .srv-form {
+    border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+    padding: 16px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;
+  }
+  .sf-title { font-weight: 700; font-size: 1rem; }
+  .sf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .sf-field {
+    display: flex; flex-direction: column; gap: 5px;
+    font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--dim);
+  }
+  .sf-field input, .sf-field select, .sf-keytext, .sf-keypass {
+    background: var(--bg); border: 1.5px solid var(--border); border-radius: 9px;
+    color: var(--text); font-family: var(--mono); font-size: 16px;
+    padding: 10px 12px; outline: none; width: 100%;
+  }
+  .sf-field input:focus, .sf-field select:focus, .sf-keytext:focus, .sf-keypass:focus { border-color: var(--green); }
+  .sf-keytext { min-height: 110px; resize: vertical; font-size: 12px; }
+  .sf-seg { display: flex; gap: 6px; margin-top: 2px; }
+  .sf-seg-btn {
+    flex: 1; padding: 9px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text2); cursor: pointer;
+    font-family: var(--sans); font-size: 0.85rem; font-weight: 600; text-transform: none; letter-spacing: 0;
+  }
+  .sf-seg-btn.active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+  .sf-err { color: var(--red); font-family: var(--mono); font-size: 0.75rem; min-height: 15px; }
+  .sf-row { display: flex; gap: 10px; }
+  .sf-btn {
+    flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); cursor: pointer;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+  }
+  .sf-btn.primary { background: linear-gradient(135deg, #6e72f0, #5a5ed6); color: #fff; border: none; }
+  .sf-btn:active { transform: scale(0.98); }
+  @media (max-width: 520px) {
+    .sf-grid { grid-template-columns: 1fr 1fr; }
+    .srv-open { padding: 7px 10px; font-size: 0.8rem; }
+    .dash-stats { gap: 8px; }
+    .stat { padding: 11px 12px; }
+    .stat-n { font-size: 1.25rem; }
+  }
+  @media (min-width: 760px) {
+    .sf-grid { grid-template-columns: 2fr 3fr 1.2fr 0.8fr; }
+    .srv-form { padding: 20px; }
+  }
 
   /* ── Animated Success / Error ──────────────────── */
   .anim-check, .anim-x {
@@ -810,15 +1062,9 @@
 
   /* ── Desktop ────────────────────────────────────── */
   @media (min-width: 600px) {
-    #app { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
-    .header { padding: 10px 18px; }
     #messages { padding: 18px; }
     .prompt-bar { padding: 12px 18px; }
     .cmd-output .copy-btn { opacity: 0.5; }
-  }
-  @media (min-width: 900px) {
-    body { background: #06060a; }
-    #app { max-width: 720px; }
   }
 </style>
 </head>
@@ -858,10 +1104,15 @@
 <!-- App -->
 <div id="app">
   <header class="header">
-    <div class="h-logo">t_</div>
-    <nav class="h-tabs" aria-label="Main navigation">
-      <a class="tab active" id="tab-screens" href="#/screens">screens <span class="tab-dot" id="screenBadge"></span></a>
-      <a class="tab" id="tab-chat" href="#/chat">chat</a>
+    <a class="h-logo" href="#/servers" aria-label="termi — all servers">t_</a>
+    <a class="h-word" href="#/servers">termi</a>
+    <nav class="h-ctx" id="hCtx" hidden aria-label="Server navigation">
+      <span class="h-crumb">/</span>
+      <span class="h-srv" id="hSrvName"></span>
+      <div class="h-tabs">
+        <a class="tab" id="tab-screens" href="#/srv/local/screens">screens <span class="tab-dot" id="screenBadge"></span></a>
+        <a class="tab" id="tab-chat" href="#/srv/local/chat">chat</a>
+      </div>
     </nav>
     <div class="h-busy" id="busySpinner"></div>
     <div class="h-status" onclick="showLatency()">
@@ -878,7 +1129,8 @@
         <div class="h-drop-sep"></div>
         <div class="h-drop-item" style="cursor:default; font-size:10px; color:var(--dim)">Theme</div>
         <div class="theme-row">
-          <div class="theme-dot active" style="background:linear-gradient(135deg,#22dd88,#1aaf6a)" onclick="setTheme('green')"></div>
+          <div class="theme-dot active" style="background:linear-gradient(135deg,#6e72f0,#5a5ed6)" onclick="setTheme('indigo')"></div>
+          <div class="theme-dot" style="background:linear-gradient(135deg,#22dd88,#1aaf6a)" onclick="setTheme('green')"></div>
           <div class="theme-dot" style="background:linear-gradient(135deg,#6ba1ff,#3b82f6)" onclick="setTheme('blue')"></div>
           <div class="theme-dot" style="background:linear-gradient(135deg,#ffb347,#f59e0b)" onclick="setTheme('amber')"></div>
           <div class="theme-dot" style="background:linear-gradient(135deg,#c084fc,#9333ea)" onclick="setTheme('purple')"></div>
@@ -889,26 +1141,129 @@
     </div>
   </header>
 
-  <!-- ── Screens: session list (default view) ─────── -->
-  <section class="view active" id="view-screens">
-    <div class="scr-header">
-      <h2 class="scr-title"><span id="scrTitleText">sessions</span> <span class="scr-count" id="screenCount">0</span></h2>
-      <button class="scr-refresh" onclick="refreshScreens()" aria-label="Refresh session list">&#8635; refresh</button>
-    </div>
-    <div id="screenSessionList">
-      <a id="backToPanes" class="scr-card back-chip" href="#/screens" hidden aria-label="Back to open terminal panes">
-        <span class="scr-chevron" style="transform:rotate(180deg)">&#8250;</span>
-        <div class="scr-name">back to open panes</div>
+  <!-- ── Servers dashboard (landing view) ──────────── -->
+  <section class="view" id="view-servers">
+    <div class="dash-wrap">
+      <h1 class="dash-title">Your servers</h1>
+      <p class="dash-sub">Every box you manage, one place. Tap a server to work on it.</p>
+      <a class="dash-summary" href="#/analytics" id="dashSummary" aria-label="Open analytics">
+        <span id="sumLine">loading fleet status…</span>
+        <span class="dash-summary-go">analytics &#8594;</span>
       </a>
-      <div id="screenSkeletons" hidden>
-        <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
-        <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
-        <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
+      <div class="dash-sec">
+        <h2>Servers</h2>
+        <input id="srvSearch" class="dash-search" type="search" placeholder="search servers..."
+          oninput="filterServers(this.value)" aria-label="Search servers" autocomplete="off">
+        <a class="dash-add-top" href="#/analytics">analytics</a>
+        <a class="dash-add-top" href="#/keys">ssh keys</a>
+        <button type="button" class="dash-add-top" id="addServerBtn" onclick="openServerForm()">+ add server</button>
       </div>
-      <div id="screenEmpty" class="scr-empty" hidden>
-        <div class="scr-empty-icon">&gt;_</div>
-        <div class="scr-empty-text">No active screen sessions</div>
-        <div class="scr-empty-hint"><span class="g">$</span> screen -S &lt;name&gt;</div>
+      <div class="srv-grid" id="serverList" role="list" aria-label="Configured servers"></div>
+      <div class="dash-empty" id="serverNoMatch" hidden style="border:1px solid var(--border);border-radius:14px;margin-top:12px">No servers match your search.</div>
+      <div class="dash-empty" id="serverListEmpty" hidden style="border:1px dashed var(--border-hi);border-radius:14px;margin-top:12px">
+        No other servers yet — add one with an IP and SSH key to manage it from here.
+      </div>
+      <form class="srv-form" id="serverForm" hidden onsubmit="saveServerForm(event)">
+        <div class="sf-title" id="sfTitle">Add server</div>
+        <div class="sf-grid">
+          <label class="sf-field">name<input id="sfName" placeholder="prod-1" autocomplete="off"></label>
+          <label class="sf-field">host / ip<input id="sfHost" placeholder="203.0.113.10" autocomplete="off" required></label>
+          <label class="sf-field">user<input id="sfUser" value="root" autocomplete="off"></label>
+          <label class="sf-field">port<input id="sfPort" type="number" value="22" min="1" max="65535"></label>
+        </div>
+        <div class="sf-field">authentication
+          <div class="sf-seg" role="tablist">
+            <button type="button" class="sf-seg-btn active" id="sfAuthKey" onclick="setAuthType('key')" role="tab">SSH key</button>
+            <button type="button" class="sf-seg-btn" id="sfAuthPass" onclick="setAuthType('password')" role="tab">Password</button>
+          </div>
+        </div>
+        <div id="sfKeyWrap">
+          <label class="sf-field">ssh key
+            <select id="sfKey" onchange="onKeySelect()"></select>
+          </label>
+          <textarea id="sfKeyText" class="sf-keytext" placeholder="paste private key (OpenSSH / PEM) — stored encrypted, never shown again" hidden autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+          <input id="sfKeyPass" class="sf-keypass" type="password" placeholder="key passphrase — leave empty if the key has none" hidden autocomplete="off">
+        </div>
+        <label class="sf-field" id="sfPassWrap" hidden>password
+          <input id="sfPassword" type="password" placeholder="ssh password — stored encrypted" autocomplete="off">
+        </label>
+        <div class="sf-err" id="sfError" role="alert"></div>
+        <div class="sf-row">
+          <button type="button" class="sf-btn" onclick="closeServerForm()">cancel</button>
+          <button type="submit" class="sf-btn primary" id="sfSave">save server</button>
+        </div>
+      </form>
+
+    </div>
+  </section>
+
+  <!-- ── SSH keys (own page — keeps the dashboard scalable) ── -->
+  <section class="view" id="view-keys">
+    <div class="dash-wrap">
+      <h1 class="dash-title">SSH keys</h1>
+      <p class="dash-sub">Keys are stored encrypted and never shown again. Editing a key re-tests every server that uses it.</p>
+      <div class="dash-sec">
+        <a class="dash-add-top" href="#/servers">&#8592; servers</a>
+        <span style="flex:1"></span>
+        <button type="button" class="dash-add-top" id="addKeyBtn" onclick="openKeyForm()">+ add key</button>
+      </div>
+      <div class="dash-list" id="keyList" role="list" aria-label="Stored SSH keys"></div>
+      <div class="dash-empty" id="keyListEmpty" hidden style="border:1px dashed var(--border-hi);border-radius:14px;margin-top:12px">
+        No keys stored yet — add one to connect servers.
+      </div>
+      <form class="srv-form" id="keyForm" hidden onsubmit="saveKeyForm(event)" style="margin-top:14px">
+        <div class="sf-title" id="kfTitle">Add SSH key</div>
+        <label class="sf-field">name<input id="kfName" placeholder="my laptop key" autocomplete="off"></label>
+        <textarea id="kfKeyText" class="sf-keytext" placeholder="paste private key (OpenSSH / PEM) — stored encrypted, never shown again" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+        <input id="kfKeyPass" class="sf-keypass" type="password" placeholder="key passphrase — leave empty if none" autocomplete="off">
+        <div class="sf-err" id="kfError" role="alert"></div>
+        <div class="sf-row">
+          <button type="button" class="sf-btn" onclick="closeKeyForm()">cancel</button>
+          <button type="submit" class="sf-btn primary" id="kfSave">save key</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ── Analytics / monitoring ─────────────────────── -->
+  <section class="view" id="view-analytics">
+    <div class="dash-wrap">
+      <h1 class="dash-title">Analytics</h1>
+      <p class="dash-sub">Live health and load across your fleet. Uptime is tracked continuously.</p>
+      <div class="dash-sec">
+        <a class="dash-add-top" href="#/servers">&#8592; servers</a>
+        <span style="flex:1"></span>
+        <button type="button" class="dash-add-top" onclick="loadAnalytics()" aria-label="Refresh analytics">&#8635; refresh</button>
+      </div>
+      <div class="dash-stats" id="anSummary" aria-label="Fleet overview">
+        <div class="stat"><div class="stat-n" id="statServers">–</div><div class="stat-l">servers</div></div>
+        <div class="stat" id="statOfflineCard"><div class="stat-n" id="statOffline">–</div><div class="stat-l">offline</div></div>
+        <div class="stat"><div class="stat-n" id="statActive">–</div><div class="stat-l">active sessions</div></div>
+        <div class="stat"><div class="stat-n" id="statAvgLoad">–</div><div class="stat-l">avg cpu load</div></div>
+      </div>
+      <div class="an-grid" id="anGrid"></div>
+      <h2 class="an-h2">Recent activity</h2>
+      <div class="dash-list" id="anIncidents"><div class="dash-empty" id="anIncEmpty">No status changes recorded yet.</div></div>
+    </div>
+  </section>
+
+  <!-- ── Screens: session list ──────────────────────── -->
+  <section class="view active" id="view-screens">
+    <div class="dash-wrap">
+      <h1 class="dash-title" id="scrBigTitle">sessions</h1>
+      <p class="dash-sub">Live terminals on this server — tap a session to open it.</p>
+      <div class="dash-sec">
+        <h2><span id="scrTitleText">sessions</span> <span class="scr-count" id="screenCount">0</span></h2>
+        <a id="backToPanes" class="dash-add-top" href="#/screens" hidden aria-label="Back to open terminal panes">&#8592; back to panes</a>
+        <button type="button" class="dash-add-top" onclick="createScreenPrompt()" aria-label="Start a new screen session">+ new screen</button>
+        <button type="button" class="dash-add-top" onclick="refreshScreens()" aria-label="Refresh session list">&#8635;</button>
+      </div>
+      <div class="dash-list" id="screenSessionList">
+        <div id="screenSkeletons" hidden>
+          <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
+          <div class="skel-card"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line"></div></div></div>
+        </div>
+        <div id="screenEmpty" class="dash-empty" hidden>No active screen sessions — starting one for you...</div>
       </div>
     </div>
   </section>
@@ -916,7 +1271,7 @@
   <!-- ── Terminal view ─────────────────────────────── -->
   <section class="view" id="view-term">
     <div class="stv-header">
-      <a class="stv-back" href="#/screens" aria-label="Back to session list">&#8592; sessions</a>
+      <a class="stv-back" id="termBackBtn" href="#/screens" aria-label="Back to session list">&#8592; sessions</a>
       <h2 class="stv-name" id="termName"></h2>
       <span class="stv-status" id="termStatus" role="status"></span>
       <a class="stv-back" id="addPaneBtn" href="#/screens" hidden aria-label="Open another session in a split pane" style="padding:5px 9px">+ split</a>
@@ -1010,12 +1365,19 @@
   let socket=null, token='', connected=false, thinkingEl=null;
   let activeAgent='agent', lastThinkingContent='', latencyMs=null, latencyInterval=null;
   // Route fully describes what's on screen:
-  //   #/screens                  → session list (the default tab)
-  //   #/screen/<a>[,<b>...]      → terminal view with those panes open
-  //   #/screens/add/<a>[,<b>]    → session list shown to pick an extra pane, panes kept alive
-  //   #/chat                     → agent chat
+  //   #/servers                        → servers dashboard (the landing view)
+  //   #/srv/<id>/screens               → session list for that server
+  //   #/srv/<id>/screen/<a>[,<b>...]   → terminal view with those panes open
+  //   #/srv/<id>/screens/add/<a>[,<b>] → session list shown to pick an extra pane
+  //   #/srv/<id>/chat                  → agent chat on that server
+  // Legacy #/screens, #/screen/x, #/chat routes map to the 'local' server.
   // Every navigation is a URL change, so links/back-button/automation all agree.
-  let route={view:'screens',sessions:[],add:false};
+  let route={view:'servers',server:null,sessions:[],add:false};
+  let servers=[];                // servers:list payload
+  let sshKeys=[];                // stored key metadata (never the material)
+  const serverStatus={};         // id → last servers:status payload
+  let curServer=localStorage.getItem('termi_server')||'local';
+  let editingServer=null;        // server id while the edit form is open
   const screenPanes=new Map(); // fullName -> { term, fit, paneEl, name, status }
   let focusedScreen=null;      // fullName of the pane that receives input
   let pendingFocus=null;       // pane to focus after the next route sync
@@ -1026,7 +1388,7 @@
   let swipeStartX=0, swipeStartY=0;
   let lastInputMsg='';
   let autoScroll=true, agentBusy=false;
-  let currentTheme=localStorage.getItem('termi_theme')||'green';
+  let currentTheme=localStorage.getItem('termi_theme')||'indigo';
 
   const $=id=>document.getElementById(id);
 
@@ -1064,11 +1426,17 @@
     socket=io({ auth:{token}, reconnection:true, reconnectionDelay:1000, reconnectionAttempts:Infinity });
 
     socket.on('connect',()=>{
+      // The socket being up is what "connected" means — one unreachable
+      // SSH target must never blank the dashboard or block other servers.
+      connected=true; hideSplash();
       $('reconnectBanner').classList.remove('visible');
-      socket.emit('init'); startLatencyPing();
+      socket.emit('init',{serverId:curServer}); startLatencyPing();
+      startScreenRefresh();
+      applyRoute();   // render the current view and request its data now
+      if(route.view==='servers')socket.emit('servers:list');
       // Server-side ptys die when the socket drops — re-attach any open panes.
       screenPanes.forEach((p,k)=>{
-        socket.emit('screen:join',{sessionName:k,cols:p.term.cols||80,rows:p.term.rows||24});
+        socket.emit('screen:join',{serverId:p.serverId,sessionName:k,cols:p.term.cols||80,rows:p.term.rows||24});
       });
     });
     socket.on('disconnect',()=>{
@@ -1077,7 +1445,7 @@
     });
     socket.on('reconnect',()=>{
       $('reconnectBanner').classList.remove('visible');
-      socket.emit('init'); showToast('reconnected');
+      socket.emit('init',{serverId:curServer}); showToast('reconnected');
     });
     socket.on('connect_error',err=>{
       if(err.message==='Unauthorized'){
@@ -1085,24 +1453,27 @@
         $('authError').textContent='Invalid token';
       }
     });
-    socket.on('status',({connected:c,message,agentType,agentAvail,claudeAvail})=>{
-      connected=c; hideSplash();
-      setStatus(c?'on':'err',c?message:'offline');
+    // Per-server readiness (chat CLI availability, session state). Purely
+    // informational — never gates rendering.
+    socket.on('status',({serverId,connected:c,message,agentType,agentAvail,claudeAvail})=>{
+      if(serverId&&serverId!==curServer)return;
+      hideSplash();
+      setStatus(c?'on':'err',message||'offline');
       if(c){
         $('sendBtn').disabled=false;
         if(agentType)setAgentUI(agentType);
-        if(agentAvail===false)$('opt-agent').disabled=true;
-        if(claudeAvail===false)$('opt-claude').disabled=true;
-        startScreenRefresh();
-        applyRoute();           // open any panes the URL asks for (deep link / reload)
-        loadScreenSessions();
+        $('opt-agent').disabled=agentAvail===false;
+        $('opt-claude').disabled=claudeAvail===false;
+        if(route.view==='screens'||route.view==='term')loadScreenSessions();
       }
     });
-    socket.on('agentSwitched',({agentType})=>{
+    socket.on('agentSwitched',({serverId,agentType})=>{
+      if(serverId&&serverId!==curServer)return;
       activeAgent=agentType; setAgentUI(agentType);
       showToast('switched to '+(agentType==='claude'?'Claude':'Cursor'));
     });
-    socket.on('response',({type,content})=>{
+    socket.on('response',({serverId,type,content})=>{
+      if(serverId&&serverId!==curServer)return;
       if(type==='thinking'){
         lastThinkingContent=content||'';
         if(thinkingEl){
@@ -1119,19 +1490,65 @@
         if(finalContent){addMsg(type,finalContent);haptic('light');playNotif();}
       }
     });
-    socket.on('queue',q=>{
+    socket.on('queue',({serverId,queue:q})=>{
+      if(serverId&&serverId!==curServer)return;
       const b=$('queueBanner');
       if(q.length>0){b.classList.add('on');$('queueCount').textContent=q.length;}
       else b.classList.remove('on');
     });
-    socket.on('screen:list',({sessions})=>{ renderScreenList(sessions); });
-    socket.on('screen:output',({sessionName,data})=>{
+    socket.on('screen:list',({serverId,sessions})=>{
+      if(serverId&&serverId!==(route.server||curServer))return;
+      renderScreenList(sessions);
+    });
+    socket.on('screen:output',({serverId,sessionName,data})=>{
+      if(serverId&&route.server&&serverId!==route.server)return;
       const p=sessionName?screenPanes.get(sessionName):null;
       if(p){ p.term.write(data); }
       else if(!sessionName&&screenPanes.size===1){ screenPanes.values().next().value.term.write(data); } // back-compat
     });
-    socket.on('screen:exit',({sessionName})=>{ handleScreenExit(sessionName); });
+    socket.on('screen:exit',({serverId,sessionName,error})=>{
+      if(serverId&&route.server&&serverId!==route.server)return;
+      if(error)showToast(error);
+      handleScreenExit(sessionName);
+    });
+    // A rename changes the fullName — remap any open pane and the URL.
+    socket.on('screen:renamed',({serverId,oldFullName,newFullName})=>{
+      if(route.server&&serverId!==route.server)return;
+      if(screenPanes.has(oldFullName))removePane(oldFullName,true);
+      if(route.sessions.includes(oldFullName)){
+        const list=route.sessions.map(s=>s===oldFullName?newFullName:s);
+        history.replaceState(null,'',termHash(list));
+        applyRoute(); // reattaches under the new name
+      }
+      showToast('renamed to '+prettyName(newFullName));
+    });
+    // ── Dashboard events ───────────────────────────
+    socket.on('servers:list',({servers:list,keys})=>{
+      servers=list.filter(s=>!s.local); sshKeys=keys||[];
+      // A remembered server that was removed falls back to this box.
+      if(curServer!=='local'&&!servers.some(s=>s.id===curServer)){
+        curServer='local'; localStorage.setItem('termi_server','local');
+      }
+      if(!$('hCtx').hidden)$('hSrvName').textContent=serverLabel();
+      renderServerDash();
+    });
+    socket.on('servers:status',(st)=>{
+      serverStatus[st.id]=st;
+      updateServerRow(st.id);
+      updateDashStats();
+    });
+    socket.on('servers:error',({message})=>{
+      if(!$('serverForm').hidden){ $('sfError').textContent=message; $('sfSave').disabled=false; }
+      if(!$('keyForm').hidden){ $('kfError').textContent=message; $('kfSave').disabled=false; }
+      showToast(message);
+    });
+    socket.on('servers:test',(res)=>{
+      showToast(res.online?('reachable — '+(res.screens||0)+' screens'):('unreachable: '+(res.error||'ssh failed')));
+    });
+    socket.on('analytics:data',renderAnalytics);
   }
+
+  function loadAnalytics(){ if(socket&&connected)socket.emit('analytics:get'); }
 
   // ── Latency ─────────────────────────────────────────
   function startLatencyPing(){stopLatencyPing();measureLatency();latencyInterval=setInterval(measureLatency,15000);}
@@ -1145,56 +1562,105 @@
     });
   }
   function showLatency(){haptic('light');measureLatency();}
-  function resetSession(){if(!socket)return;haptic('medium');socket.emit('reset');showToast('session reset');}
+  function resetSession(){if(!socket)return;haptic('medium');socket.emit('reset',{serverId:curServer});showToast('session reset');}
 
   // ── Router ──────────────────────────────────────────
   function parseHash(){
     const raw=(location.hash||'').replace(/^#\/?/,'');
     const parts=raw.split('/');
     const dec=s=>(s||'').split(',').map(decodeURIComponent).filter(Boolean).slice(0,MAX_PANES);
-    if(parts[0]==='chat') return {view:'chat',sessions:[],add:false};
-    if(parts[0]==='screen'&&parts[1]) return {view:'term',sessions:dec(parts[1]),add:false};
-    if(parts[0]==='screens'&&parts[1]==='add'&&parts[2]) return {view:'screens',sessions:dec(parts[2]),add:true};
-    return {view:'screens',sessions:[],add:false};
+    // Legacy (pre-dashboard) routes → local server
+    if(parts[0]==='chat') return {view:'chat',server:'local',sessions:[],add:false};
+    if(parts[0]==='screen'&&parts[1]) return {view:'term',server:'local',sessions:dec(parts[1]),add:false};
+    if(parts[0]==='screens'&&parts[1]==='add'&&parts[2]) return {view:'screens',server:'local',sessions:dec(parts[2]),add:true};
+    if(parts[0]==='screens') return {view:'screens',server:'local',sessions:[],add:false};
+    if(parts[0]==='keys') return {view:'keys',server:null,sessions:[],add:false};
+    if(parts[0]==='analytics') return {view:'analytics',server:null,sessions:[],add:false};
+    if(parts[0]==='srv'&&parts[1]){
+      const srv=decodeURIComponent(parts[1]);
+      if(parts[2]==='chat') return {view:'chat',server:srv,sessions:[],add:false};
+      if(parts[2]==='screen'&&parts[3]) return {view:'term',server:srv,sessions:dec(parts[3]),add:false};
+      if(parts[2]==='screens'&&parts[3]==='add'&&parts[4]) return {view:'screens',server:srv,sessions:dec(parts[4]),add:true};
+      return {view:'screens',server:srv,sessions:[],add:false};
+    }
+    return {view:'servers',server:null,sessions:[],add:false};
   }
-  function termHash(list){ return '#/screen/'+list.map(encodeURIComponent).join(','); }
+  function srvHash(srv,rest){ return '#/srv/'+encodeURIComponent(srv)+'/'+rest; }
+  function termHash(list){ return srvHash(route.server||curServer,'screen/'+list.map(encodeURIComponent).join(',')); }
   function prettyName(fullName){ const i=fullName.indexOf('.'); return i>0?fullName.slice(i+1):fullName; }
+  function serverLabel(id){
+    const sid=id||curServer;
+    if(sid==='local')return 'this server';
+    const s=servers.find(x=>x.id===sid);
+    return s?s.name:sid;
+  }
 
   function applyRoute(){
+    const prevServer=route&&route.server;
     route=parseHash();
     if(route.view==='term'&&!route.sessions.length){
-      history.replaceState(null,'','#/screens');
+      history.replaceState(null,'',srvHash(route.server||'local','screens'));
       route=parseHash();
     }
     const r=route;
-    $('tab-screens').classList.toggle('active',r.view!=='chat');
-    $('tab-chat').classList.toggle('active',r.view==='chat');
+    if(r.server&&r.server!==curServer){ curServer=r.server; localStorage.setItem('termi_server',curServer); }
+
+    // Screens/chat only exist inside a server; the dashboard is the top level.
+    const inServer=r.view==='screens'||r.view==='term'||r.view==='chat';
+    $('hCtx').hidden=!inServer;
+    if(inServer){
+      $('hSrvName').textContent=serverLabel();
+      $('tab-screens').classList.toggle('active',r.view==='screens'||r.view==='term');
+      $('tab-chat').classList.toggle('active',r.view==='chat');
+      $('tab-screens').setAttribute('href',srvHash(curServer,'screens'));
+      $('tab-chat').setAttribute('href',srvHash(curServer,'chat'));
+    }
+    $('view-servers').classList.toggle('active',r.view==='servers');
+    $('view-keys').classList.toggle('active',r.view==='keys');
+    $('view-analytics').classList.toggle('active',r.view==='analytics');
     $('view-screens').classList.toggle('active',r.view==='screens');
     $('view-term').classList.toggle('active',r.view==='term');
     $('view-chat').classList.toggle('active',r.view==='chat');
 
-    if(r.view==='chat'){
+    // Server scope changed → that server's chat + fresh session list
+    if(r.server&&prevServer!==r.server){
+      sessionCache=[]; listLoaded=false;
+      resetChatUI();
+      if(connected)socket.emit('init',{serverId:r.server});
+    }
+
+    if(r.view==='analytics'){
       syncPanes([]);
-      document.title='termi — chat';
+      if(connected){socket.emit('servers:list');loadAnalytics();}
+      document.title='termi — analytics';
+    } else if(r.view==='servers'||r.view==='keys'){
+      syncPanes([]);
+      if(connected)socket.emit('servers:list');
+      document.title=r.view==='keys'?'termi — ssh keys':'termi — servers';
+    } else if(r.view==='chat'){
+      syncPanes([]);
+      document.title='termi — '+serverLabel()+' chat';
     } else if(r.view==='screens'){
       // In add-mode the open panes stay alive behind the list.
       syncPanes(r.add?r.sessions:[]);
       updateScreensChrome();
       loadScreenSessions();
-      document.title='termi — sessions';
+      document.title='termi — '+serverLabel();
     } else {
       $('screenBadge').classList.remove('on');
       syncPanes(r.sessions);
       document.title='termi — '+prettyName(r.sessions[0]);
     }
     updateAddPaneBtn();
+    if(r.server)$('termBackBtn').setAttribute('href',srvHash(r.server,'screens'));
     if(r.view!=='term')$('app').classList.remove('term-fs'); // full screen is terminal-only
     applyViewportHeight();
     if(r.view==='term'){ setTimeout(refitAllPanes,60); setTimeout(refitAllPanes,220); }
   }
 
   function updateScreensChrome(){
-    $('scrTitleText').textContent=route.add?'add split pane':'sessions';
+    $('scrBigTitle').textContent=route.add?'Add split pane':serverLabel();
+    $('scrTitleText').textContent='sessions';
     const back=$('backToPanes');
     back.hidden=!route.add;
     if(route.add)back.setAttribute('href',termHash(route.sessions));
@@ -1205,19 +1671,23 @@
     const b=$('addPaneBtn');
     const can=route.view==='term'&&route.sessions.length>0&&route.sessions.length<MAX_PANES;
     b.hidden=!can;
-    if(can)b.setAttribute('href','#/screens/add/'+route.sessions.map(encodeURIComponent).join(','));
+    if(can)b.setAttribute('href',srvHash(route.server,'screens/add/'+route.sessions.map(encodeURIComponent).join(',')));
   }
 
   // ── Session list ────────────────────────────────────
   function loadScreenSessions(){
     if(!socket||!connected)return;
     if(!listLoaded)$('screenSkeletons').hidden=false;
-    socket.emit('screen:list');
+    socket.emit('screen:list',{serverId:route.server||curServer});
   }
   function refreshScreens(){haptic('light');showToast('refreshing...');loadScreenSessions();}
   function startScreenRefresh(){
     stopScreenRefresh();
-    screenRefreshInterval=setInterval(()=>{ if(route.view!=='chat')loadScreenSessions(); },5000);
+    screenRefreshInterval=setInterval(()=>{
+      if(route.view==='analytics')loadAnalytics();
+      else if(route.view==='servers'||route.view==='keys')socket.emit('servers:list');
+      else if(route.view!=='chat')loadScreenSessions();
+    },5000);
   }
   function stopScreenRefresh(){if(screenRefreshInterval){clearInterval(screenRefreshInterval);screenRefreshInterval=null;}}
 
@@ -1233,14 +1703,30 @@
     const a=document.createElement('a');
     a.className='scr-card';
     a.dataset.session=s.fullName;
-    a.innerHTML=`<div class="scr-icon">&gt;_</div>
+    a.innerHTML=`<span class="srv-dot"></span>
       <div class="scr-info">
         <div class="scr-name"></div>
         <div class="scr-meta"><span class="scr-badge"></span><span class="scr-pid"></span><span class="scr-badge live scr-open" hidden>open</span></div>
       </div>
+      <button type="button" class="srv-icon scr-rn" title="Rename session" aria-label="Rename session ${s.name}">&#9998;</button>
       <div class="scr-chevron">&#8250;</div>`;
     a.querySelector('.scr-name').textContent=s.name;
+    a.querySelector('.scr-rn').addEventListener('click',e=>{
+      e.preventDefault(); e.stopPropagation();
+      renameScreenPrompt(a.dataset.session,a.querySelector('.scr-name').textContent);
+    });
     return a;
+  }
+
+  function renameScreenPrompt(fullName,currentName){
+    if(!socket||!connected){showToast('not connected');return;}
+    const nn=prompt('Rename session:',currentName);
+    if(nn===null)return;
+    const clean=nn.trim().replace(/[^\w.\-]+/g,'-');
+    if(!clean||clean===currentName)return;
+    socket.emit('screen:rename',{serverId:route.server||curServer,sessionName:fullName,newName:clean});
+    showToast('renaming...');
+    haptic('medium');
   }
 
   function updateCard(a,s){
@@ -1251,12 +1737,40 @@
     a.setAttribute('href',cardHref(s));
     a.setAttribute('aria-label',(open?'Focus open session ':'Open screen session ')+s.name);
     a.dataset.open=open?'1':'0';
-    a.querySelector('.scr-icon').className='scr-icon '+(live?'live':'idle');
+    a.querySelector('.srv-dot').className='srv-dot '+(live?'on':'idle-dot');
     const b=a.querySelector('.scr-badge');
     b.className='scr-badge '+(live?'live':'idle');
     b.textContent=live?'live':'idle';
     a.querySelector('.scr-pid').textContent='pid '+s.pid;
     a.querySelector('.scr-open').hidden=!open;
+  }
+
+  // "+ new screen" — name it and it appears on this server.
+  function createScreenPrompt(){
+    if(!socket||!connected){showToast('not connected');return;}
+    const name=prompt('Name for the new screen session:');
+    if(name===null)return;
+    const clean=name.trim().replace(/[^\w.\-]+/g,'-')||'terminal';
+    socket.emit('screen:create',{serverId:route.server||curServer,name:clean});
+    showToast('creating '+clean+'...');
+    haptic('medium');
+  }
+
+  // A server with zero screens is a dead end — provision a default
+  // "<server-name>.terminal" session so there's always a shell to open.
+  // Once per server per page load, and only from the screens view itself
+  // (dashboard probes must never spawn sessions).
+  const autoCreated=new Set();
+  function maybeAutoCreateScreen(sessions){
+    if(route.view!=='screens'||route.add)return;
+    if(sessions.length)return;
+    const sid=route.server||curServer;
+    if(sid!=='local'&&!servers.length)return; // wait until names are known
+    if(autoCreated.has(sid))return;
+    autoCreated.add(sid);
+    const base=(sid==='local'?'local':serverLabel(sid)).toLowerCase().replace(/[^\w\-]+/g,'-');
+    socket.emit('screen:create',{serverId:sid,name:base+'.terminal'});
+    showToast('starting a terminal session...');
   }
 
   // In-place keyed rendering: card nodes keep their identity between the 5s
@@ -1277,6 +1791,7 @@
     });
     list.querySelectorAll('a.scr-card[data-session]').forEach(c=>{ if(!seen.has(c.dataset.session))c.remove(); });
     $('screenEmpty').hidden=sessions.length>0;
+    maybeAutoCreateScreen(sessions);
     // keep open panes' status badges fresh
     screenPanes.forEach((p,k)=>{
       const s=sessions.find(x=>x.fullName===k);
@@ -1299,6 +1814,436 @@
     if(card.dataset.open==='1')pendingFocus=card.dataset.session;
     if(location.hash===card.getAttribute('href'))setTimeout(applyRoute,0);
   });
+
+  // ── Servers dashboard ───────────────────────────────
+  function statusDotCls(id){
+    const st=serverStatus[id];
+    if(!st)return 'unk';
+    return st.online===true?'on':'off';
+  }
+
+  function buildServerRow(s){
+    const card=document.createElement('div');
+    card.className='srv-card'; card.dataset.server=s.id; card.setAttribute('role','listitem');
+    const isLocal=s.id==='local';
+    card.innerHTML=`<div class="srv-card-head">
+        <span class="srv-dot unk"></span>
+        <div class="srv-name"><span class="srv-name-text"></span></div>
+        <span class="srv-badge sb-local" ${isLocal?'':'hidden'}>local</span>
+        <span class="srv-badge sb-scr srv-scr" hidden></span>
+        <span class="srv-badge sb-off srv-off" hidden>offline</span>
+      </div>
+      <div class="srv-sub"></div>
+      <div class="srv-err" hidden></div>
+      <div class="srv-screens" hidden></div>
+      <div class="srv-acts">
+        <a class="srv-open" href="${srvHash(s.id,'screens')}">Open</a>
+        <button type="button" class="srv-icon srv-edit" title="Edit server" aria-label="Edit ${s.name}" ${isLocal?'hidden':''}>&#9998;</button>
+        <button type="button" class="srv-icon del srv-del" title="Remove server" aria-label="Remove ${s.name}" ${isLocal?'hidden':''}>&times;</button>
+      </div>`;
+    card.querySelector('.srv-edit').addEventListener('click',()=>openServerForm(s.id));
+    card.querySelector('.srv-del').addEventListener('click',()=>deleteServer(s.id));
+    // The whole card is a target; buttons, links, and chips handle themselves.
+    card.addEventListener('click',e=>{
+      if(e.target.closest('button,a'))return;
+      haptic('light');
+      location.hash=srvHash(s.id,'screens');
+    });
+    return card;
+  }
+
+  // Compact fleet-status line on the dashboard (the big cards live on the
+  // analytics page now).
+  function updateDashStats(){
+    const ids=['local',...servers.map(s=>s.id)];
+    const known=ids.map(id=>serverStatus[id]).filter(Boolean);
+    const checking=known.length<ids.length;
+    const offline=known.filter(s=>s.online===false).length;
+    const active=known.reduce((n,s)=>n+(s.attached||0),0);
+    const el=$('sumLine');
+    if(el){
+      const parts=[ids.length+' server'+(ids.length===1?'':'s')];
+      parts.push(offline>0?`<span class="sum-down">${offline} offline</span>`:'all online');
+      parts.push(active+' active session'+(active===1?'':'s'));
+      el.innerHTML=parts.join(' · ')+(checking?' …':'');
+    }
+  }
+
+  // ── Analytics page ──────────────────────────────────
+  function fmtUptime(sec){
+    if(!sec)return '–';
+    const d=Math.floor(sec/86400), h=Math.floor(sec%86400/3600), m=Math.floor(sec%3600/60);
+    if(d)return d+'d '+h+'h';
+    if(h)return h+'h '+m+'m';
+    return m+'m';
+  }
+  function fmtGb(kb){ return kb?(kb/1048576).toFixed(kb>=104857600?0:1)+'G':'–'; }
+  function ago(t){
+    if(!t)return '';
+    const s=Math.floor((Date.now()-t)/1000);
+    if(s<60)return s+'s ago';
+    if(s<3600)return Math.floor(s/60)+'m ago';
+    if(s<86400)return Math.floor(s/3600)+'h ago';
+    return Math.floor(s/86400)+'d ago';
+  }
+  function barClass(pct){ return pct>=90?'crit':pct>=70?'warn':''; }
+  function metricBar(label,pct,valText){
+    const p=pct==null?0:pct;
+    return `<div class="an-metric">
+      <div class="an-metric-top"><span>${label}</span><span class="v">${valText}</span></div>
+      <div class="an-bar"><span class="${barClass(p)}" style="width:${Math.min(100,p)}%"></span></div>
+    </div>`;
+  }
+
+  function renderAnalytics({rows,incidents}){
+    // Summary cards
+    const offline=rows.filter(r=>!r.online).length;
+    const active=rows.reduce((n,r)=>n+(r.attached||0),0);
+    const loads=rows.filter(r=>r.online&&r.metrics&&r.metrics.loadPct!=null).map(r=>r.metrics.loadPct);
+    const avgLoad=loads.length?Math.round(loads.reduce((a,b)=>a+b,0)/loads.length):null;
+    $('statServers').textContent=rows.length;
+    $('statOffline').textContent=offline;
+    $('statOfflineCard').classList.toggle('alert',offline>0);
+    $('statActive').textContent=active;
+    $('statAvgLoad').textContent=avgLoad==null?'–':avgLoad+'%';
+
+    // Per-server metric cards
+    const grid=$('anGrid');
+    grid.innerHTML=rows.map(r=>{
+      const up=r.uptime||{};
+      const upPct=up.uptimePct==null?'':`<span class="an-up">uptime <b>${up.uptimePct}%</b></span>`;
+      if(!r.online){
+        return `<div class="an-card down">
+          <div class="an-head"><span class="srv-dot off"></span><span class="an-name">${escHtml(r.name)}</span>${up.lastOnline?`<span class="an-up">seen ${ago(up.lastOnline)}</span>`:''}</div>
+          <div class="an-down-msg">${escHtml(r.error||'unreachable')}</div>
+          ${up.uptimePct!=null?`<div class="an-foot"><span>uptime <b>${up.uptimePct}%</b></span></div>`:''}
+        </div>`;
+      }
+      const m=r.metrics||{};
+      return `<div class="an-card">
+        <div class="an-head"><span class="srv-dot on"></span><span class="an-name">${escHtml(r.name)}</span>${upPct}</div>
+        ${metricBar('cpu load'+(m.load?' ('+m.load[0].toFixed(2)+')':''),m.loadPct,(m.loadPct==null?'–':m.loadPct+'%'))}
+        ${metricBar('memory',m.memPct,(m.memPct==null?'–':m.memPct+'% · '+fmtGb(m.memUsedKb)+'/'+fmtGb(m.memTotalKb)))}
+        ${metricBar('disk /',m.diskPct,(m.diskPct==null?'–':m.diskPct+'% · '+fmtGb(m.diskUsedKb)+'/'+fmtGb(m.diskTotalKb)))}
+        <div class="an-foot">
+          <span>up <b>${fmtUptime(m.uptimeSec)}</b></span>
+          <span><b>${r.screens}</b> screen${r.screens===1?'':'s'}</span>
+          <span><b>${r.attached}</b> active</span>
+          ${m.cpus?`<span><b>${m.cpus}</b> cpu${m.cpus===1?'':'s'}</span>`:''}
+        </div>
+      </div>`;
+    }).join('');
+
+    // Incidents
+    const inc=$('anIncidents');
+    if(!incidents||!incidents.length){
+      inc.innerHTML='<div class="dash-empty" id="anIncEmpty">No status changes recorded yet.</div>';
+    } else {
+      inc.innerHTML=incidents.map(e=>`<div class="an-inc ${e.online?'up':'down'}">
+        <span class="an-inc-dot"></span>
+        <span class="an-inc-name">${escHtml(e.name)}</span>
+        <span class="an-inc-state">${e.online?'came online':'went offline'}</span>
+        <span class="an-inc-time">${ago(e.t)}</span>
+      </div>`).join('');
+    }
+  }
+
+  // Client-side search over name/host/user — a 100+ fleet needs filtering,
+  // not scrolling. Rows are hidden, not removed, so keyed rendering holds.
+  let srvFilter='';
+  function filterServers(v){
+    srvFilter=(v||'').trim().toLowerCase();
+    applyServerFilter();
+  }
+  function applyServerFilter(){
+    let visible=0;
+    $('serverList').querySelectorAll('.srv-card[data-server]').forEach(r=>{
+      const hit=!srvFilter||(r.dataset.search||'').includes(srvFilter);
+      r.style.display=hit?'':'none';
+      if(hit)visible++;
+    });
+    $('serverNoMatch').hidden=!(srvFilter&&visible===0);
+  }
+
+  const CHIP_CAP=3;
+
+  function updateServerRow(id){
+    const row=$('serverList').querySelector(`.srv-card[data-server="${cssEsc(id)}"]`);
+    if(!row)return;
+    const s=id==='local'?{name:'this server'}:servers.find(x=>x.id===id);
+    if(!s)return;
+    const st=serverStatus[id]||{};
+    row.querySelector('.srv-dot').className='srv-dot '+statusDotCls(id);
+    row.querySelector('.srv-name-text').textContent=s.name;
+    row.querySelector('.srv-sub').textContent=id==='local'
+      ?'this box — no SSH needed'
+      :`${s.user}@${s.host}${s.port&&s.port!==22?':'+s.port:''} · ${s.authType==='password'?'password':'key'}`;
+    row.dataset.search=(id==='local'?'local this server ':'')+
+      (s.name+' '+(s.user||'')+' '+(s.host||'')).toLowerCase();
+    const scr=row.querySelector('.srv-scr');
+    const off=row.querySelector('.srv-off');
+    scr.hidden=!(st.online&&typeof st.screens==='number');
+    if(!scr.hidden)scr.textContent=st.screens+(st.screens===1?' screen':' screens');
+    off.hidden=st.online!==false;
+    // Real failure reason beats a bare "offline"
+    const errEl=row.querySelector('.srv-err');
+    errEl.hidden=!(st.online===false&&st.error);
+    if(!errEl.hidden)errEl.textContent=String(st.error).slice(0,140);
+    // Screen sessions as chips — tap one to land straight in that terminal.
+    // Keyed by content so the 5s refresh never swaps a chip mid-tap.
+    const chips=row.querySelector('.srv-screens');
+    const sess=st.sessions||[];
+    const total=typeof st.screens==='number'?st.screens:sess.length;
+    const shown=sess.slice(0,CHIP_CAP);
+    const ser=JSON.stringify([total,...shown.map(x=>[x.fullName,x.status])]);
+    if(chips.dataset.ser!==ser){
+      chips.dataset.ser=ser;
+      chips.innerHTML='';
+      shown.forEach(x=>{
+        const a=document.createElement('a');
+        a.className='srv-chip '+(x.status==='attached'?'live':'idle');
+        a.href=srvHash(id,'screen/'+encodeURIComponent(x.fullName));
+        a.textContent=x.name;
+        a.setAttribute('aria-label','Open screen '+x.name+' on '+s.name);
+        chips.appendChild(a);
+      });
+      if(total>shown.length){
+        const more=document.createElement('a');
+        more.className='srv-chip';
+        more.href=srvHash(id,'screens');
+        more.textContent='+'+(total-shown.length)+' more';
+        more.setAttribute('aria-label','See all '+total+' screens on '+s.name);
+        chips.appendChild(more);
+      }
+    }
+    chips.hidden=sess.length===0;
+  }
+
+  // Keyed in-place rendering (same trick as the screen list) so the 5s
+  // dashboard refresh never swaps a row out from under a tap.
+  function renderServerDash(){
+    const list=$('serverList');
+    const all=[{id:'local',name:'this server',local:true},...servers];
+    const seen=new Set();
+    all.forEach(s=>{
+      seen.add(s.id);
+      let row=list.querySelector(`.srv-card[data-server="${cssEsc(s.id)}"]`);
+      if(!row){row=buildServerRow(s);list.appendChild(row);}
+      updateServerRow(s.id);
+    });
+    list.querySelectorAll('.srv-card[data-server]').forEach(r=>{ if(!seen.has(r.dataset.server))r.remove(); });
+    $('serverListEmpty').hidden=servers.length>0;
+    applyServerFilter();
+    refreshKeySelect();
+    renderKeyList();
+    updateDashStats();
+  }
+
+  // ── SSH key list ────────────────────────────────────
+  let editingKey=null;
+
+  function keyUsedBy(id){ return servers.filter(s=>s.keyId===id).map(s=>s.name); }
+
+  function buildKeyRow(k){
+    const row=document.createElement('div');
+    row.className='srv-row key-row'; row.dataset.key=k.id; row.setAttribute('role','listitem');
+    row.style.cursor='default';
+    row.innerHTML=`<span class="key-ico" aria-hidden="true">&#128273;</span>
+      <div class="srv-info">
+        <div class="srv-name"><span class="key-name"></span></div>
+        <div class="srv-sub key-sub"></div>
+      </div>
+      <div class="srv-acts">
+        <button type="button" class="srv-icon key-edit" title="Edit key" aria-label="Edit key">&#9998;</button>
+        <button type="button" class="srv-icon del key-del" title="Delete key" aria-label="Delete key">&times;</button>
+      </div>`;
+    row.querySelector('.key-edit').addEventListener('click',()=>openKeyForm(k.id));
+    row.querySelector('.key-del').addEventListener('click',()=>deleteKey(k.id));
+    return row;
+  }
+
+  function renderKeyList(){
+    const list=$('keyList');
+    const seen=new Set();
+    sshKeys.forEach(k=>{
+      seen.add(k.id);
+      let row=list.querySelector(`.key-row[data-key="${cssEsc(k.id)}"]`);
+      if(!row){row=buildKeyRow(k);list.appendChild(row);}
+      row.querySelector('.key-name').textContent=k.name;
+      const used=keyUsedBy(k.id);
+      row.querySelector('.key-sub').textContent=used.length
+        ?('used by '+used.join(', '))
+        :'not used by any server';
+    });
+    list.querySelectorAll('.key-row').forEach(r=>{ if(!seen.has(r.dataset.key))r.remove(); });
+    $('keyListEmpty').hidden=sshKeys.length>0;
+  }
+
+  function openKeyForm(id){
+    editingKey=id||null;
+    const k=id?sshKeys.find(x=>x.id===id):null;
+    $('kfTitle').textContent=k?('Edit '+k.name):'Add SSH key';
+    $('kfName').value=k?k.name:'';
+    $('kfKeyText').value='';
+    $('kfKeyText').placeholder=k
+      ?'leave empty to keep the current key material'
+      :'paste private key (OpenSSH / PEM) — stored encrypted, never shown again';
+    $('kfKeyPass').value='';
+    $('kfKeyPass').placeholder=k
+      ?'set / replace passphrase — leave empty to keep as is'
+      :'key passphrase — leave empty if none';
+    $('kfError').textContent='';
+    $('kfSave').disabled=false;
+    $('keyForm').hidden=false; $('addKeyBtn').hidden=true;
+    $('kfName').focus();
+    haptic('light');
+  }
+
+  function closeKeyForm(){
+    $('keyForm').hidden=true; $('addKeyBtn').hidden=false;
+    editingKey=null;
+  }
+
+  function saveKeyForm(e){
+    e.preventDefault();
+    if(!socket||!connected){showToast('not connected');return;}
+    const err=$('kfError'); err.textContent='';
+    const name=$('kfName').value.trim();
+    const material=$('kfKeyText').value.trim();
+    const pass=$('kfKeyPass').value;
+    if(editingKey){
+      const payload={id:editingKey};
+      if(name)payload.name=name;
+      if(material)payload.privateKey=material;
+      if(pass)payload.passphrase=pass;
+      socket.emit('keys:update',payload);
+    } else {
+      if(!material){err.textContent='Paste a private key.';return;}
+      socket.emit('keys:add',{name:name||'key',privateKey:material,...(pass?{passphrase:pass}:{})});
+    }
+    $('kfSave').disabled=true;
+    setTimeout(()=>{ if($('kfError').textContent==='')closeKeyForm(); },600);
+    showToast(editingKey?'updating key...':'adding key...');
+    haptic('medium');
+  }
+
+  function deleteKey(id){
+    const k=sshKeys.find(x=>x.id===id);
+    if(!k)return;
+    const used=keyUsedBy(id);
+    if(used.length){showToast('key is used by '+used.join(', '));return;}
+    if(!confirm('Delete key "'+k.name+'" permanently?'))return;
+    socket.emit('keys:remove',{id});
+    haptic('medium');
+  }
+
+  // ── Add / edit server form ──────────────────────────
+  function refreshKeySelect(){
+    const sel=$('sfKey');
+    const cur=sel.value;
+    sel.innerHTML='';
+    sshKeys.forEach(k=>{
+      const o=document.createElement('option');
+      o.value=k.id; o.textContent=k.name;
+      sel.appendChild(o);
+    });
+    const add=document.createElement('option');
+    add.value='__new__'; add.textContent='+ paste a new key...';
+    sel.appendChild(add);
+    if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
+    else sel.value=sshKeys.length?sshKeys[0].id:'__new__';
+    onKeySelect();
+  }
+
+  function onKeySelect(){
+    const pasting=$('sfKey').value==='__new__';
+    $('sfKeyText').hidden=!pasting;
+    $('sfKeyPass').hidden=!pasting;
+  }
+
+  let sfAuth='key';
+  function setAuthType(t){
+    sfAuth=t;
+    $('sfAuthKey').classList.toggle('active',t==='key');
+    $('sfAuthPass').classList.toggle('active',t==='password');
+    $('sfKeyWrap').hidden=t!=='key';
+    $('sfPassWrap').hidden=t!=='password';
+  }
+
+  function openServerForm(id){
+    editingServer=id||null;
+    const f=$('serverForm');
+    const s=id?servers.find(x=>x.id===id):null;
+    $('sfTitle').textContent=s?('Edit '+s.name):'Add server';
+    $('sfName').value=s?s.name:'';
+    $('sfHost').value=s?s.host:'';
+    $('sfUser').value=s?s.user:'root';
+    $('sfPort').value=s?(s.port||22):22;
+    $('sfError').textContent='';
+    $('sfKeyText').value='';
+    $('sfKeyPass').value='';
+    $('sfPassword').value='';
+    setAuthType(s&&s.authType==='password'?'password':'key');
+    if(s&&s.authType==='password')$('sfPassword').placeholder='leave empty to keep current password';
+    else $('sfPassword').placeholder='ssh password — stored encrypted';
+    refreshKeySelect();
+    if(s&&s.keyId&&[...$('sfKey').options].some(o=>o.value===s.keyId))$('sfKey').value=s.keyId;
+    onKeySelect();
+    f.hidden=false; $('addServerBtn').hidden=true;
+    $('sfSave').disabled=false;
+    $('sfHost').focus();
+    haptic('light');
+  }
+
+  function closeServerForm(){
+    $('serverForm').hidden=true;
+    $('addServerBtn').hidden=false;
+    editingServer=null;
+  }
+
+  function saveServerForm(e){
+    e.preventDefault();
+    if(!socket||!connected){showToast('not connected');return;}
+    const err=$('sfError'); err.textContent='';
+    const payload={
+      name:$('sfName').value.trim()||$('sfHost').value.trim(),
+      host:$('sfHost').value.trim(),
+      user:$('sfUser').value.trim()||'root',
+      port:parseInt($('sfPort').value,10)||22,
+      authType:sfAuth,
+    };
+    if(sfAuth==='password'){
+      const pw=$('sfPassword').value;
+      if(!pw&&!editingServer){err.textContent='Enter a password.';return;}
+      if(pw)payload.password=pw;
+    } else {
+      const keySel=$('sfKey').value;
+      if(keySel==='__new__'){
+        const material=$('sfKeyText').value.trim();
+        if(!material){err.textContent='Paste a private key or pick a stored one.';return;}
+        payload.newKey={name:(payload.name||'key')+' key',privateKey:material};
+        const pass=$('sfKeyPass').value;
+        if(pass)payload.newKey.passphrase=pass;
+      } else {
+        payload.keyId=keySel;
+      }
+    }
+    $('sfSave').disabled=true;
+    if(editingServer)socket.emit('servers:update',{id:editingServer,...payload});
+    else socket.emit('servers:add',payload);
+    // servers:list broadcast confirms the save; errors reopen via servers:error
+    setTimeout(()=>{ if($('sfError').textContent==='')closeServerForm(); },600);
+    showToast(editingServer?'saving...':'adding server...');
+    haptic('medium');
+  }
+
+  function deleteServer(id){
+    const s=servers.find(x=>x.id===id);
+    if(!s)return;
+    if(!confirm('Remove "'+s.name+'" from termi?\n(The server itself is untouched.)'))return;
+    socket.emit('servers:remove',{id});
+    haptic('medium');
+  }
 
   // ── Terminal panes ──────────────────────────────────
   function syncPanes(desired){
@@ -1357,7 +2302,7 @@
         if(term.buffer.active.type!=='alternate'){
           term.scrollLines(lines);
         }else if(p&&p.copyMode){
-          if(socket)socket.emit('screen:input',{sessionName:fullName,
+          if(socket)socket.emit('screen:input',{serverId:p.serverId,sessionName:fullName,
             data:(lines>0?'\x1b[B':'\x1b[A').repeat(Math.min(Math.abs(lines),term.rows||24))});
         }else if(Date.now()-lastHint>3000){
           lastHint=Date.now();
@@ -1390,9 +2335,9 @@
       cursorBlink:true, cursorStyle:'block', fontSize:screenTermFontSize(screenPanes.size+1),
       fontFamily:'JetBrains Mono, SF Mono, monospace',
       theme:{
-        background:'#0b0b0f',foreground:'#e8e8ef',cursor:'#22dd88',
+        background:'#0a0a0c',foreground:'#e8e8ef',cursor:'#6e72f0',
         selectionBackground:'#6ba1ff44',
-        black:'#0b0b0f',red:'#ff6b6b',green:'#22dd88',yellow:'#ffb347',
+        black:'#0a0a0c',red:'#ff6b6b',green:'#22dd88',yellow:'#ffb347',
         blue:'#6ba1ff',magenta:'#c084fc',cyan:'#22d3ee',white:'#e8e8ef',
         brightBlack:'#555568',brightRed:'#ff8a80',brightGreen:'#69f0ae',
         brightYellow:'#ffd740',brightBlue:'#82b1ff',brightMagenta:'#ea80fc',
@@ -1406,23 +2351,24 @@
     // the visible input bar below is the intended typing target.
     const helper=pane.querySelector('.xterm-helper-textarea');
     if(helper)helper.setAttribute('aria-hidden','true');
+    const sid=route.server||curServer; // panes belong to the server they were opened on
     enableTouchScroll(term,pane.querySelector('.scr-pane-term'),fullName);
-    term.onData(d=>{const clean=stripMouseReports(d);if(socket&&clean)socket.emit('screen:input',{sessionName:fullName,data:clean});});
-    screenPanes.set(fullName,{term,fit,paneEl:pane,name:meta.name,status:meta.status});
+    term.onData(d=>{const clean=stripMouseReports(d);if(socket&&clean)socket.emit('screen:input',{serverId:sid,sessionName:fullName,data:clean});});
+    screenPanes.set(fullName,{term,fit,paneEl:pane,name:meta.name,status:meta.status,serverId:sid});
     pane.addEventListener('mousedown',()=>focusPane(fullName));
     pane.addEventListener('touchstart',()=>focusPane(fullName),{passive:true});
     pane.querySelector('.scr-pane-close').addEventListener('click',e=>{
       e.stopPropagation(); e.preventDefault(); closePaneNav(fullName);
     });
     updatePaneGrid();
-    socket.emit('screen:join',{sessionName:fullName,cols:term.cols||80,rows:term.rows||24});
-    const sync=()=>{try{fit.fit();socket.emit('screen:resize',{sessionName:fullName,cols:term.cols,rows:term.rows});}catch(_){}};
+    socket.emit('screen:join',{serverId:sid,sessionName:fullName,cols:term.cols||80,rows:term.rows||24});
+    const sync=()=>{try{fit.fit();socket.emit('screen:resize',{serverId:sid,sessionName:fullName,cols:term.cols,rows:term.rows});}catch(_){}};
     setTimeout(sync,120); setTimeout(sync,320);
   }
 
   function removePane(fullName,notify){
     const p=screenPanes.get(fullName); if(!p)return;
-    if(notify&&socket)socket.emit('screen:leave',{sessionName:fullName});
+    if(notify&&socket)socket.emit('screen:leave',{serverId:p.serverId,sessionName:fullName});
     try{p.term.dispose();}catch(_){}
     p.paneEl.remove();
     screenPanes.delete(fullName);
@@ -1434,7 +2380,7 @@
   function closePaneNav(fullName){
     haptic('light');
     const remaining=route.sessions.filter(s=>s!==fullName);
-    location.hash=remaining.length?termHash(remaining):'#/screens';
+    location.hash=remaining.length?termHash(remaining):srvHash(route.server||curServer,'screens');
   }
 
   function handleScreenExit(sessionName){
@@ -1442,9 +2388,10 @@
     removePane(sessionName,false);
     showToast('session ended: '+prettyName(sessionName));
     const remaining=route.sessions.filter(s=>s!==sessionName);
+    const screensHash=srvHash(route.server||curServer,'screens');
     let target=null;
-    if(route.view==='term')target=remaining.length?termHash(remaining):'#/screens';
-    else if(route.add)target=remaining.length?'#/screens/add/'+remaining.map(encodeURIComponent).join(','):'#/screens';
+    if(route.view==='term')target=remaining.length?termHash(remaining):screensHash;
+    else if(route.add)target=remaining.length?srvHash(route.server,'screens/add/'+remaining.map(encodeURIComponent).join(',')):screensHash;
     if(target){ history.replaceState(null,'',target); applyRoute(); }
     loadScreenSessions();
   }
@@ -1526,7 +2473,7 @@
       try{
         if(p.term.options.fontSize!==fs)p.term.options.fontSize=fs;
         p.fit.fit();
-        if(socket)socket.emit('screen:resize',{sessionName:k,cols:p.term.cols,rows:p.term.rows});
+        if(socket)socket.emit('screen:resize',{serverId:p.serverId,sessionName:k,cols:p.term.cols,rows:p.term.rows});
       }catch(_){}
     });
     updateTermBar();
@@ -1557,7 +2504,8 @@
   function sendScreenSeq(seq){
     if(!socket||!focusedScreen)return;
     haptic('light');
-    socket.emit('screen:input',{sessionName:focusedScreen,data:seq});
+    const p=screenPanes.get(focusedScreen);
+    socket.emit('screen:input',{serverId:p?p.serverId:(route.server||curServer),sessionName:focusedScreen,data:seq});
   }
 
   function screenFocusInput(){
@@ -1630,15 +2578,16 @@
   document.addEventListener('touchend',e=>{
     if(route.view!=='term')return;
     const dx=e.changedTouches[0].clientX-swipeStartX, dy=Math.abs(e.changedTouches[0].clientY-swipeStartY);
-    if(swipeStartX<30&&dx>80&&dy<80)location.hash='#/screens';
+    if(swipeStartX<30&&dx>80&&dy<80)location.hash=srvHash(route.server||curServer,'screens');
   },{passive:true});
 
   // Pull to refresh on the session list
   let ptrStartY=0,ptrActive=false;
   function setupPullToRefresh(){
-    const list=$('screenSessionList');
-    list.addEventListener('touchstart',e=>{if(list.scrollTop===0){ptrStartY=e.touches[0].clientY;ptrActive=true;}},{passive:true});
-    list.addEventListener('touchend',e=>{if(!ptrActive)return;ptrActive=false;if(e.changedTouches[0].clientY-ptrStartY>60){haptic('light');loadScreenSessions();showToast('refreshing...');}},{passive:true});
+    // The dash-wrap is the scroll container now, not the list itself.
+    const wrap=document.querySelector('#view-screens .dash-wrap');
+    wrap.addEventListener('touchstart',e=>{if(wrap.scrollTop===0){ptrStartY=e.touches[0].clientY;ptrActive=true;}},{passive:true});
+    wrap.addEventListener('touchend',e=>{if(!ptrActive)return;ptrActive=false;if(e.changedTouches[0].clientY-ptrStartY>60){haptic('light');loadScreenSessions();showToast('refreshing...');}},{passive:true});
   }
 
   // ── Chat messages ───────────────────────────────────
@@ -1747,20 +2696,33 @@
     }
   }
 
-  // ── History ─────────────────────────────────────────
+  // ── History (kept per server) ───────────────────────
+  function histKey(){
+    // The local server keeps the pre-dashboard key so old history survives.
+    return curServer==='local'?'termi_history':'termi_history_'+curServer;
+  }
   function saveMessage(type,content){
     if(type==='thinking')return;
     try{
-      const h=JSON.parse(localStorage.getItem('termi_history')||'[]');
+      const h=JSON.parse(localStorage.getItem(histKey())||'[]');
       h.push({type,content,ts:Date.now()});
       if(h.length>200)h.splice(0,h.length-200);
-      localStorage.setItem('termi_history',JSON.stringify(h));
+      localStorage.setItem(histKey(),JSON.stringify(h));
     }catch(_){}
+  }
+
+  // Swap the chat pane to the current server's conversation.
+  function resetChatUI(){
+    if(thinkingEl){thinkingEl=null;}
+    lastThinkingContent='';
+    setBusy(false);
+    showWelcome();
+    loadHistory();
   }
 
   function loadHistory(){
     try{
-      const h=JSON.parse(localStorage.getItem('termi_history')||'[]');
+      const h=JSON.parse(localStorage.getItem(histKey())||'[]');
       const recent=h.slice(-50);
       if(!recent.length)return;
       hideWelcome();
@@ -1799,7 +2761,7 @@
   }
 
   function clearHistory(){
-    localStorage.removeItem('termi_history');
+    localStorage.removeItem(histKey());
     $('messages').innerHTML='';
     showWelcome(); showToast('history cleared'); haptic('light');
   }
@@ -1832,12 +2794,12 @@
     haptic('light'); addMsg('you',msg);
     el.value=''; resizeTA(el);
     setBusy(true);
-    socket.emit('chat',{message:msg});
+    socket.emit('chat',{message:msg,serverId:curServer});
   }
   function quick(cmd){haptic('light');$('input').value=cmd;send();}
 
   // ── Agent switch ────────────────────────────────────
-  function switchAgent(type){if(!socket||!connected||type===activeAgent)return;haptic('medium');socket.emit('setAgent',{type});}
+  function switchAgent(type){if(!socket||!connected||type===activeAgent)return;haptic('medium');socket.emit('setAgent',{type,serverId:curServer});}
   function setAgentUI(type){activeAgent=type;document.querySelectorAll('.agent-btn').forEach(b=>b.classList.remove('active'));$('opt-'+type).classList.add('active');}
 
   // ── Utils ───────────────────────────────────────────
@@ -1938,6 +2900,7 @@
 
   // Theme
   const themes={
+    indigo:{accent:'#6e72f0',accentDark:'#5a5ed6',dim:'rgba(110,114,240,0.08)',mid:'rgba(110,114,240,0.15)',glow:'rgba(110,114,240,0.25)'},
     green: {accent:'#22dd88',accentDark:'#1aaf6a',dim:'rgba(34,221,136,0.08)',mid:'rgba(34,221,136,0.15)',glow:'rgba(34,221,136,0.25)'},
     blue:  {accent:'#6ba1ff',accentDark:'#3b82f6',dim:'rgba(107,161,255,0.08)',mid:'rgba(107,161,255,0.15)',glow:'rgba(107,161,255,0.25)'},
     amber: {accent:'#ffb347',accentDark:'#f59e0b',dim:'rgba(255,179,71,0.08)',mid:'rgba(255,179,71,0.15)',glow:'rgba(255,179,71,0.25)'},
@@ -1954,7 +2917,7 @@
     });
     document.querySelectorAll('.theme-dot').forEach(d=>d.classList.remove('active'));
     const dots=document.querySelectorAll('.theme-dot');
-    const idx={green:0,blue:1,amber:2,purple:3}[name];
+    const idx={indigo:0,green:1,blue:2,amber:3,purple:4}[name];
     if(dots[idx])dots[idx].classList.add('active');
     haptic('light'); showToast(name+' theme');
   }
@@ -1996,7 +2959,7 @@
       if(now-lastTap<300&&lastInputMsg&&connected&&!agentBusy){
         haptic('medium');
         addMsg('you',lastInputMsg);
-        socket.emit('chat',{message:lastInputMsg});
+        socket.emit('chat',{message:lastInputMsg,serverId:curServer});
         showToast('retrying...');
       }
       lastTap=now;
@@ -2014,7 +2977,7 @@
 
   // ── Init ────────────────────────────────────────────
   window.addEventListener('load',()=>{
-    if(!location.hash||location.hash==='#')history.replaceState(null,'','#/screens');
+    if(!location.hash||location.hash==='#')history.replaceState(null,'','#/servers');
     applyRoute();
     window.addEventListener('hashchange',applyRoute);
     const saved=localStorage.getItem('termi_token');
@@ -2026,7 +2989,7 @@
     setupScrollLock();
     setupLongPress();
     setupDoubleTapRetry();
-    if(currentTheme!=='green')setTheme(currentTheme);
+    if(currentTheme!=='indigo')setTheme(currentTheme);
     setTimeout(()=>{if(!connected&&$('splash').style.display!=='none'){hideSplash();if(!token)$('auth').style.display='flex';}},5000);
   });
 
