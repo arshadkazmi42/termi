@@ -354,6 +354,11 @@ async function attachScreen(socket, serverId, sessionName, cols, rows) {
 
   handle.onExit(({ exitCode }) => {
     console.log('[screen] pty exited:', serverId, sessionName, 'code:', exitCode);
+    // Only the currently registered pty speaks for the session — exits from
+    // ptys we already replaced (re-attach) or detached must not reach the
+    // client as "session ended".
+    const cur = screenPtys.get(key);
+    if (cur && cur.handle !== handle) return;
     screenPtys.delete(key);
     socket.emit('screen:exit', { serverId, sessionName, exitCode });
   });

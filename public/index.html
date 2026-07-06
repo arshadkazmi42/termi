@@ -203,7 +203,9 @@
   .h-srv {
     font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text2);
     max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-decoration: none;
   }
+  .h-srv:active { color: var(--green); }
   .h-tabs { display: flex; gap: 4px; min-width: 0; }
   .tab {
     display: inline-flex; align-items: center; gap: 6px;
@@ -214,11 +216,6 @@
   }
   .tab.active { color: var(--green); background: var(--green-dim); border-color: var(--green-mid); }
   .tab:active { opacity: 0.7; }
-  .tab-dot {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--orange);
-    display: none;
-  }
-  .tab-dot.on { display: inline-block; }
 
   /* Agent busy spinner in header */
   .h-busy {
@@ -678,12 +675,80 @@
   /* Special-keys bar — always visible in the terminal view */
   .stv-keybar {
     display: flex; flex-shrink: 0; gap: 6px; padding: 6px 8px;
-    padding-bottom: calc(6px + var(--safe-b));
     background: var(--surface); border-top: 1px solid var(--border);
     overflow-x: auto; scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
   .stv-keybar::-webkit-scrollbar { display: none; }
+  .stv-keybar.off { display: none; }
+  .stv-input-send.on { color: var(--green); border-color: var(--green); }
+
+  /* Tab strip — one tab per working screen, across all servers. Sits at the
+     very bottom (thumb zone) so switching screens is one tap. */
+  .stv-tabbar {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    padding: 5px 8px calc(5px + var(--safe-b));
+    background: var(--surface); border-top: 1px solid var(--border);
+  }
+  .stv-tabs {
+    display: flex; gap: 6px; flex: 1; min-width: 0;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .stv-tabs::-webkit-scrollbar { display: none; }
+  .stv-tab {
+    flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+    max-width: 46vw; height: 30px; padding: 0 10px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text2); font-family: var(--mono); font-size: 11px;
+    text-decoration: none; user-select: none;
+  }
+  .stv-tab.active { border-color: var(--green); color: var(--green); background: var(--bg); }
+  .stv-tab-srv { color: var(--dim); font-size: 9px; max-width: 12vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stv-tab-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stv-tab-x {
+    display: none; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 18px; height: 18px; margin-right: -4px; border: none; border-radius: 5px;
+    background: var(--surface3); color: var(--dim); font-size: 13px; line-height: 1; cursor: pointer;
+  }
+  .stv-tab.active .stv-tab-x { display: inline-flex; }
+  .stv-tab-x:active { background: var(--red); color: #fff; }
+  .stv-tab-add {
+    flex-shrink: 0; width: 30px; height: 30px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--green); font-family: var(--mono); font-size: 16px; line-height: 1;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .stv-tab-add:active { background: var(--green); color: #fff; }
+
+  /* Bottom sheet (new-tab picker) */
+  .sheet-backdrop {
+    position: fixed; inset: 0; z-index: 130;
+    background: rgba(0,0,0,0.55); display: flex; align-items: flex-end;
+  }
+  .sheet {
+    width: 100%; max-height: 62vh; display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border-hi); border-bottom: none;
+    border-radius: 16px 16px 0 0; padding: 8px 12px calc(10px + var(--safe-b));
+    animation: sheetUp 0.18s ease;
+  }
+  @keyframes sheetUp { from { transform: translateY(30%); opacity: 0.4; } to { transform: none; opacity: 1; } }
+  .sheet-grip { width: 36px; height: 4px; border-radius: 2px; background: var(--border-hi); margin: 2px auto 8px; flex-shrink: 0; }
+  .sheet-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text2); padding: 0 4px 8px; flex-shrink: 0; }
+  .sheet-body { overflow-y: auto; min-height: 60px; -webkit-overflow-scrolling: touch; }
+  .sheet-srv {
+    display: flex; align-items: center; gap: 8px; padding: 10px 4px 4px;
+    font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--text2);
+  }
+  .sheet-srv-n { margin-left: auto; font-weight: 500; color: var(--dim); font-size: 10px; }
+  .sheet-row {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 10px; margin: 3px 0; text-align: left;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); font-family: var(--mono); font-size: 12px; cursor: pointer;
+  }
+  .sheet-row:active { border-color: var(--green); }
+  .sheet-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .sheet-empty { padding: 8px 10px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
   .stv-key {
     flex-shrink: 0; min-width: 40px; height: 34px;
     background: var(--surface2); border: 1px solid var(--border);
@@ -715,6 +780,7 @@
   #app.term-fs .header,
   #app.term-fs .stv-header,
   #app.term-fs .stv-inputbar,
+  #app.term-fs .stv-tabbar,
   #app.term-fs .stv-keybar { display: none; }
   #app.term-fs #screenTermContainer {
     padding-top: calc(2px + var(--safe-t));
@@ -1084,6 +1150,15 @@
 <!-- Reconnect -->
 <div id="reconnectBanner">connection lost - reconnecting...</div>
 
+<!-- New-tab picker: every server's screens, one sheet -->
+<div class="sheet-backdrop" id="tabPickerWrap" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Open a screen in a new tab">
+    <div class="sheet-grip"></div>
+    <div class="sheet-title">Open in new tab</div>
+    <div class="sheet-body" id="tabPickerList"></div>
+  </div>
+</div>
+
 <!-- Auth -->
 <div id="auth" style="display:none">
   <form class="auth-card" onsubmit="authenticate(event)">
@@ -1108,9 +1183,8 @@
     <a class="h-word" href="#/servers">termi</a>
     <nav class="h-ctx" id="hCtx" hidden aria-label="Server navigation">
       <span class="h-crumb">/</span>
-      <span class="h-srv" id="hSrvName"></span>
+      <a class="h-srv" id="hSrvName" href="#/screens" aria-label="Back to this server's sessions"></a>
       <div class="h-tabs">
-        <a class="tab" id="tab-screens" href="#/srv/local/screens">screens <span class="tab-dot" id="screenBadge"></span></a>
         <a class="tab" id="tab-chat" href="#/srv/local/chat">chat</a>
       </div>
     </nav>
@@ -1283,7 +1357,7 @@
     <form class="stv-inputbar" id="termInputForm">
       <input type="text" id="termInput" class="stv-input-field" placeholder="type a command..."
         aria-label="Terminal input" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" />
-      <button type="button" class="stv-input-send" id="termTypeBtn" aria-label="Type text into terminal without pressing Enter">type</button>
+      <button type="button" class="stv-input-send" id="keysBtn" aria-label="Show or hide the terminal special-keys bar">keys</button>
       <button type="submit" class="stv-input-send primary" aria-label="Send text to terminal and press Enter">send</button>
     </form>
     <div class="stv-keybar" id="screenKeybar" role="toolbar" aria-label="Terminal special keys">
@@ -1299,7 +1373,12 @@
       <button type="button" class="stv-key" data-seq="pgdn" aria-label="Send Page Down">pgdn</button>
       <button type="button" class="stv-key" data-seq="esc" aria-label="Send Escape key">esc</button>
       <button type="button" class="stv-key" data-seq="c-c" aria-label="Send Ctrl+C interrupt">^C</button>
+      <button type="button" class="stv-key kbd" data-action="type" aria-label="Type input text into terminal without pressing Enter">type</button>
       <button type="button" class="stv-key kbd" data-action="paste" aria-label="Paste clipboard into terminal">paste</button>
+    </div>
+    <div class="stv-tabbar" id="termTabbar">
+      <div class="stv-tabs" id="termTabs" role="tablist" aria-label="Open screen tabs"></div>
+      <button type="button" class="stv-tab-add" id="tabAddBtn" onclick="openTabPicker()" aria-label="Open a screen from any server in a new tab">+</button>
     </div>
   </section>
 
@@ -1385,6 +1464,8 @@
   let listLoaded=false;
   let screenRefreshInterval=null;
   const MAX_PANES=4;
+  let termTabs=[];             // [{srv, sess:[fullName,...]}] — loaded after helpers are defined
+  let activeTab=-1;            // index into termTabs
   let swipeStartX=0, swipeStartY=0;
   let lastInputMsg='';
   let autoScroll=true, agentBusy=false;
@@ -1432,12 +1513,15 @@
       $('reconnectBanner').classList.remove('visible');
       socket.emit('init',{serverId:curServer}); startLatencyPing();
       startScreenRefresh();
-      applyRoute();   // render the current view and request its data now
-      if(route.view==='servers')socket.emit('servers:list');
-      // Server-side ptys die when the socket drops — re-attach any open panes.
+      // Server-side ptys die when the socket drops — re-attach panes that
+      // survived a reconnect. Must run BEFORE applyRoute: panes applyRoute
+      // creates join themselves, and a double join replaces the fresh pty
+      // whose exit then reads as "session ended".
       screenPanes.forEach((p,k)=>{
         socket.emit('screen:join',{serverId:p.serverId,sessionName:k,cols:p.term.cols||80,rows:p.term.rows||24});
       });
+      applyRoute();   // render the current view and request its data now
+      if(route.view==='servers')socket.emit('servers:list');
     });
     socket.on('disconnect',()=>{
       connected=false; setStatus('err','offline');
@@ -1507,12 +1591,16 @@
       else if(!sessionName&&screenPanes.size===1){ screenPanes.values().next().value.term.write(data); } // back-compat
     });
     socket.on('screen:exit',({serverId,sessionName,error})=>{
+      // Only an exit for a pane we still hold means the session really died —
+      // detaching on a tab switch also ends the pty, and that must not eat tabs.
+      if(sessionName&&screenPanes.has(sessionName))dropFromTabs(serverId||route.server||curServer,sessionName);
       if(serverId&&route.server&&serverId!==route.server)return;
       if(error)showToast(error);
       handleScreenExit(sessionName);
     });
-    // A rename changes the fullName — remap any open pane and the URL.
+    // A rename changes the fullName — remap any open pane, tab, and the URL.
     socket.on('screen:renamed',({serverId,oldFullName,newFullName})=>{
+      remapTabsRename(serverId||route.server||curServer,oldFullName,newFullName);
       if(route.server&&serverId!==route.server)return;
       if(screenPanes.has(oldFullName))removePane(oldFullName,true);
       if(route.sessions.includes(oldFullName)){
@@ -1531,11 +1619,14 @@
       }
       if(!$('hCtx').hidden)$('hSrvName').textContent=serverLabel();
       renderServerDash();
+      renderTabs();               // tab labels may resolve to real server names now
+      if(pickerOpen)renderTabPicker();
     });
     socket.on('servers:status',(st)=>{
       serverStatus[st.id]=st;
       updateServerRow(st.id);
       updateDashStats();
+      if(pickerOpen)renderTabPicker();
     });
     socket.on('servers:error',({message})=>{
       if(!$('serverForm').hidden){ $('sfError').textContent=message; $('sfSave').disabled=false; }
@@ -1610,9 +1701,8 @@
     $('hCtx').hidden=!inServer;
     if(inServer){
       $('hSrvName').textContent=serverLabel();
-      $('tab-screens').classList.toggle('active',r.view==='screens'||r.view==='term');
+      $('hSrvName').setAttribute('href',srvHash(curServer,'screens'));
       $('tab-chat').classList.toggle('active',r.view==='chat');
-      $('tab-screens').setAttribute('href',srvHash(curServer,'screens'));
       $('tab-chat').setAttribute('href',srvHash(curServer,'chat'));
     }
     $('view-servers').classList.toggle('active',r.view==='servers');
@@ -1647,11 +1737,11 @@
       loadScreenSessions();
       document.title='termi — '+serverLabel();
     } else {
-      $('screenBadge').classList.remove('on');
       syncPanes(r.sessions);
       document.title='termi — '+prettyName(r.sessions[0]);
     }
     updateAddPaneBtn();
+    syncTabs();
     if(r.server)$('termBackBtn').setAttribute('href',srvHash(r.server,'screens'));
     if(r.view!=='term')$('app').classList.remove('term-fs'); // full screen is terminal-only
     applyViewportHeight();
@@ -1672,6 +1762,167 @@
     const can=route.view==='term'&&route.sessions.length>0&&route.sessions.length<MAX_PANES;
     b.hidden=!can;
     if(can)b.setAttribute('href',srvHash(route.server,'screens/add/'+route.sessions.map(encodeURIComponent).join(',')));
+  }
+
+  // ── Screen tabs ─────────────────────────────────────
+  // One tab per working screen (or split-pane set), across all servers, so
+  // parallel work on several boxes is one tap per switch. Tabs persist in
+  // localStorage; the URL stays the single source of truth for what's open.
+  function loadTermTabs(){
+    try{
+      const raw=JSON.parse(localStorage.getItem('termi_tabs')||'[]');
+      if(Array.isArray(raw))return raw
+        .filter(t=>t&&typeof t.srv==='string'&&Array.isArray(t.sess))
+        .map(t=>({srv:t.srv,sess:t.sess.filter(s=>typeof s==='string').slice(0,MAX_PANES)}))
+        .filter(t=>t.sess.length);
+    }catch(_){}
+    return [];
+  }
+  function saveTermTabs(){ try{localStorage.setItem('termi_tabs',JSON.stringify(termTabs));}catch(_){} }
+  function tabKey(t){ return t.srv+'|'+t.sess.join(','); }
+  function tabHash(t){ return srvHash(t.srv,'screen/'+t.sess.map(encodeURIComponent).join(',')); }
+  function tabSrvLabel(id){ return id==='local'?'local':serverLabel(id); }
+
+  // Route → tabs: the open term view always corresponds to a tab. A pane set
+  // that only grew/shrank (split added or closed) is the active tab evolving,
+  // not a new tab; anything else unknown becomes a new tab.
+  function syncTabs(){
+    if(route.view==='term'&&route.sessions.length){
+      const srv=route.server||curServer;
+      const key=srv+'|'+route.sessions.join(',');
+      let idx=termTabs.findIndex(t=>tabKey(t)===key);
+      if(idx<0){
+        const a=termTabs[activeTab];
+        if(a&&a.srv===srv&&a.sess.some(s=>route.sessions.includes(s))){
+          a.sess=route.sessions.slice(); idx=activeTab;
+        }else{
+          termTabs.push({srv,sess:route.sessions.slice()}); idx=termTabs.length-1;
+        }
+        saveTermTabs();
+      }
+      activeTab=idx;
+    }
+    renderTabs();
+  }
+
+  function renderTabs(){
+    const wrap=$('termTabs');
+    wrap.innerHTML='';
+    termTabs.forEach((t,i)=>{
+      const name=prettyName(t.sess[0])+(t.sess.length>1?' +'+(t.sess.length-1):'');
+      const a=document.createElement('a');
+      a.className='stv-tab'+(i===activeTab?' active':'');
+      a.setAttribute('role','tab');
+      a.setAttribute('href',tabHash(t));
+      a.setAttribute('aria-label',(i===activeTab?'Current tab: ':'Switch to ')+name+' on '+tabSrvLabel(t.srv));
+      a.innerHTML=`<span class="stv-tab-srv"></span><span class="stv-tab-name"></span><button type="button" class="stv-tab-x" aria-label="Close this tab">&times;</button>`;
+      a.querySelector('.stv-tab-srv').textContent=tabSrvLabel(t.srv);
+      a.querySelector('.stv-tab-name').textContent=name;
+      a.addEventListener('click',e=>{
+        if(e.target.closest('.stv-tab-x')){ e.preventDefault(); e.stopPropagation(); closeTab(i); return; }
+        haptic('light');
+        if(i===activeTab)e.preventDefault(); // already here
+      });
+      wrap.appendChild(a);
+    });
+    const act=wrap.children[activeTab];
+    if(act)act.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+
+  function closeTab(i){
+    const t=termTabs[i]; if(!t)return;
+    const wasActive=i===activeTab;
+    termTabs.splice(i,1);
+    if(activeTab>i)activeTab--; else if(wasActive)activeTab=-1;
+    saveTermTabs(); haptic('light');
+    if(wasActive&&route.view==='term'){
+      const ni=Math.min(i,termTabs.length-1);
+      if(ni>=0){ activeTab=ni; location.hash=tabHash(termTabs[ni]); }
+      else location.hash=srvHash(t.srv,'screens');
+    } else renderTabs();
+  }
+
+  // A session that ended (or was renamed) must not linger inside any tab.
+  function dropFromTabs(srv,fullName){
+    let changed=false;
+    for(let i=termTabs.length-1;i>=0;i--){
+      const t=termTabs[i];
+      if(t.srv!==srv||!t.sess.includes(fullName))continue;
+      changed=true;
+      t.sess=t.sess.filter(s=>s!==fullName);
+      if(!t.sess.length){
+        termTabs.splice(i,1);
+        if(activeTab>i)activeTab--; else if(activeTab===i)activeTab=-1;
+      }
+    }
+    if(changed){ saveTermTabs(); renderTabs(); }
+  }
+  function remapTabsRename(srv,oldFullName,newFullName){
+    let changed=false;
+    termTabs.forEach(t=>{
+      if(t.srv!==srv||!t.sess.includes(oldFullName))return;
+      t.sess=t.sess.map(s=>s===oldFullName?newFullName:s); changed=true;
+    });
+    if(changed){ saveTermTabs(); renderTabs(); }
+  }
+
+  // ── New-tab picker (the "+" on the tab strip) ───────
+  let pickerOpen=false;
+  function openTabPicker(){
+    haptic('light');
+    pickerOpen=true; $('tabPickerWrap').hidden=false;
+    renderTabPicker();
+    // Fresh probe of every server; rows fill in as servers:status lands.
+    if(socket&&connected)socket.emit('servers:list');
+  }
+  function closeTabPicker(){ pickerOpen=false; $('tabPickerWrap').hidden=true; }
+  $('tabPickerWrap').addEventListener('click',e=>{ if(e.target===$('tabPickerWrap'))closeTabPicker(); });
+
+  function renderTabPicker(){
+    if(!pickerOpen)return;
+    const list=$('tabPickerList');
+    list.innerHTML='';
+    const all=[{id:'local',name:serverLabel('local')},...servers];
+    all.forEach(s=>{
+      const st=serverStatus[s.id];
+      const head=document.createElement('div');
+      head.className='sheet-srv';
+      head.innerHTML=`<span class="srv-dot ${st?(st.online?'on':'off'):'unk'}"></span><span class="sheet-srv-name"></span><span class="sheet-srv-n"></span>`;
+      head.querySelector('.sheet-srv-name').textContent=s.name;
+      const sess=(st&&st.sessions)||[];
+      head.querySelector('.sheet-srv-n').textContent=!st?'checking…':(st.online===false?'offline':sess.length+' screen'+(sess.length===1?'':'s'));
+      list.appendChild(head);
+      sess.forEach(x=>{
+        const live=x.status==='attached';
+        const row=document.createElement('button');
+        row.type='button'; row.className='sheet-row';
+        row.innerHTML=`<span class="srv-dot ${live?'on':'idle-dot'}"></span><span class="sheet-row-name"></span><span class="scr-badge ${live?'live':'idle'}">${live?'live':'idle'}</span>`;
+        row.querySelector('.sheet-row-name').textContent=x.name;
+        row.setAttribute('aria-label','Open '+x.name+' on '+s.name+' in a new tab');
+        row.addEventListener('click',()=>openTabFromPicker(s.id,x.fullName));
+        list.appendChild(row);
+      });
+      if(st&&st.online!==false&&!sess.length){
+        const e=document.createElement('div');
+        e.className='sheet-empty'; e.textContent='no screen sessions';
+        list.appendChild(e);
+      }
+    });
+  }
+
+  function openTabFromPicker(srv,fullName){
+    closeTabPicker(); haptic('medium');
+    const i=termTabs.findIndex(t=>t.srv===srv&&t.sess.includes(fullName));
+    if(i>=0){
+      activeTab=i;
+      const h=tabHash(termTabs[i]);
+      if(location.hash===h)renderTabs(); else location.hash=h;
+      return;
+    }
+    termTabs.push({srv,sess:[fullName]});
+    activeTab=termTabs.length-1;
+    saveTermTabs();
+    location.hash=tabHash(termTabs[activeTab]);
   }
 
   // ── Session list ────────────────────────────────────
@@ -1779,7 +2030,6 @@
     sessionCache=sessions; listLoaded=true;
     $('screenSkeletons').hidden=true;
     $('screenCount').textContent=sessions.length;
-    $('screenBadge').classList.toggle('on',sessions.length>0&&route.view==='chat');
     const list=$('screenSessionList');
     const seen=new Set();
     sessions.forEach(s=>{
@@ -2306,7 +2556,7 @@
             data:(lines>0?'\x1b[B':'\x1b[A').repeat(Math.min(Math.abs(lines),term.rows||24))});
         }else if(Date.now()-lastHint>3000){
           lastHint=Date.now();
-          showToast('tap "scroll" below to scroll history');
+          showToast(keysShown?'tap "scroll" below to scroll history':'tap "keys" then "scroll" to scroll history');
         }
       }
       if(e.cancelable)e.preventDefault(); // keep the page from panning/bouncing
@@ -2499,7 +2749,21 @@
     if(p){p.copyMode=false;try{p.term.scrollToBottom();}catch(_){}}
   }
   $('termInputForm').addEventListener('submit',e=>{e.preventDefault();termSend(true);});
-  $('termTypeBtn').addEventListener('click',()=>termSend(false));
+
+  // The special-keys bar starts hidden — terminal space matters more on a
+  // phone — and the "keys" button beside send toggles it.
+  let keysShown=localStorage.getItem('termi_keys')==='1';
+  function applyKeysBar(){
+    $('screenKeybar').classList.toggle('off',!keysShown);
+    $('keysBtn').classList.toggle('on',keysShown);
+    setTimeout(refitAllPanes,60); // terminal height changed — resync the ptys
+  }
+  function toggleKeys(){
+    keysShown=!keysShown;
+    localStorage.setItem('termi_keys',keysShown?'1':'0');
+    haptic('light'); applyKeysBar();
+  }
+  $('keysBtn').addEventListener('click',toggleKeys);
 
   function sendScreenSeq(seq){
     if(!socket||!focusedScreen)return;
@@ -2525,6 +2789,7 @@
     const k=e.target.closest('.stv-key');
     if(!k)return;
     if(k.getAttribute('data-action')==='paste'){ screenPaste(); return; }
+    if(k.getAttribute('data-action')==='type'){ termSend(false); return; }
     const key=k.getAttribute('data-seq');
     const seq=SCREEN_KEY_MAP[key];
     if(!seq)return;
@@ -2978,6 +3243,8 @@
   // ── Init ────────────────────────────────────────────
   window.addEventListener('load',()=>{
     if(!location.hash||location.hash==='#')history.replaceState(null,'','#/servers');
+    termTabs=loadTermTabs();
+    applyKeysBar();
     applyRoute();
     window.addEventListener('hashchange',applyRoute);
     const saved=localStorage.getItem('termi_token');
