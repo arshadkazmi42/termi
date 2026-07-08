@@ -1385,6 +1385,8 @@
     <div id="screenTermContainer" class="panes-1"></div>
     <button type="button" class="term-fs-exit" onclick="toggleTermFullscreen(false)" aria-label="Exit full screen">&#10005; exit full</button>
     <form class="stv-inputbar" id="termInputForm">
+      <button type="button" class="stv-input-send" id="termAttachBtn" aria-label="Attach a file — uploads it and puts its path in the input">+</button>
+      <input type="file" id="termFileInput" multiple hidden aria-hidden="true">
       <input type="text" id="termInput" class="stv-input-field" placeholder="type a command..."
         aria-label="Terminal input" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" />
       <button type="button" class="stv-input-send" id="keysBtn" aria-label="Show or hide the terminal special-keys bar">keys</button>
@@ -2783,6 +2785,28 @@
     if(p){p.copyMode=false;try{p.term.scrollToBottom();}catch(_){}}
   }
   $('termInputForm').addEventListener('submit',e=>{e.preventDefault();termSend(true);});
+
+  // Attach in the terminal view: upload to this pane's server, then drop the
+  // path into the input so it can be sent to whatever runs in the screen
+  // (e.g. an interactive claude session).
+  $('termAttachBtn').addEventListener('click',()=>{ haptic('light'); $('termFileInput').click(); });
+  $('termFileInput').addEventListener('change',async e=>{
+    const files=[...e.target.files]; e.target.value='';
+    for(const f of files){
+      if(f.size>15*1024*1024){ showToast((f.name||'file')+': too big (15MB max)'); continue; }
+      showToast('uploading '+(f.name||'file')+'...');
+      try{
+        const res=await fetch('/upload?serverId='+encodeURIComponent(route.server||curServer)+'&name='+encodeURIComponent(f.name||'file'),{
+          method:'POST', headers:{'x-termi-token':token,'content-type':'application/octet-stream'}, body:f });
+        const j=await res.json().catch(()=>({}));
+        if(!res.ok)throw new Error(j.error||('upload failed ('+res.status+')'));
+        const el=$('termInput');
+        el.value=(el.value?el.value.replace(/\s+$/,'')+' ':'')+j.path+' ';
+        showToast('uploaded — path added to input');
+        haptic('medium');
+      }catch(err){ showToast('upload failed: '+err.message); }
+    }
+  });
 
   // The special-keys bar starts hidden — terminal space matters more on a
   // phone — and the "keys" button beside send toggles it.
