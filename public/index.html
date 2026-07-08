@@ -480,6 +480,36 @@
     flex-shrink: 0; transition: all 0.15s; font-family: var(--mono);
   }
   .prompt-send:active { transform: scale(0.9); }
+  .prompt-attach {
+    width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+    background: var(--surface2); border: 1.5px solid var(--border); color: var(--green);
+    font-size: 20px; line-height: 1; font-family: var(--mono); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .prompt-attach:active { background: var(--green); color: #fff; transform: scale(0.9); }
+
+  /* Pending attachments above the input bar */
+  .attach-row {
+    flex-shrink: 0; display: flex; gap: 6px; padding: 6px 14px 0;
+    background: var(--surface); border-top: 1px solid var(--border);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .attach-row::-webkit-scrollbar { display: none; }
+  .attach-row + .prompt-bar { border-top: none; }
+  .attach-chip {
+    flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+    max-width: 60vw; padding: 5px 8px; border-radius: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-family: var(--mono); font-size: 11px; color: var(--text2);
+  }
+  .attach-chip.up { border-style: dashed; color: var(--dim); }
+  .attach-chip.err { border-color: var(--red); color: var(--red); }
+  .attach-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attach-chip-x {
+    background: none; border: none; color: var(--dim); cursor: pointer;
+    font-size: 13px; line-height: 1; padding: 0 2px; flex-shrink: 0;
+  }
+  .attach-chip-x:active { color: var(--red); }
   .prompt-send:disabled { background: var(--surface3); color: var(--dim); }
   .prompt-send.busy {
     background: var(--surface3); color: var(--dim); pointer-events: none;
@@ -1425,7 +1455,10 @@
       <button class="q-btn" onclick="quick('deploy latest changes')">deploy</button>
     </div>
 
+    <div class="attach-row" id="attachRow" hidden></div>
     <div class="prompt-bar" id="mainInputArea">
+      <button type="button" class="prompt-attach" id="attachBtn" onclick="pickFiles()" aria-label="Attach files or screenshots for the agent">+</button>
+      <input type="file" id="fileInput" multiple hidden aria-hidden="true">
       <div class="prompt-wrap">
         <span class="prompt-chevron">&gt;</span>
         <textarea id="input" class="prompt-ta" placeholder="type a command..." rows="1" aria-label="Message to agent"
@@ -1712,10 +1745,11 @@
     $('view-term').classList.toggle('active',r.view==='term');
     $('view-chat').classList.toggle('active',r.view==='chat');
 
-    // Server scope changed → that server's chat + fresh session list
+    // Server scope changed → that server's chat + fresh session list.
+    // Pending attachments were uploaded to the old server — drop them.
     if(r.server&&prevServer!==r.server){
       sessionCache=[]; listLoaded=false;
-      resetChatUI();
+      resetChatUI(); clearAttachments();
       if(connected)socket.emit('init',{serverId:r.server});
     }
 
@@ -3048,18 +3082,75 @@
       </div>`;
   }
 
+  // ── Attachments ─────────────────────────────────────
+  // Files upload to the CURRENT server as soon as they're picked (or pasted);
+  // send() then references their server-side paths so the agent CLI can read
+  // them. Uploads belong to one server — switching servers clears them.
+  let attachments=[]; // {name, path, uploading, error}
+
+  function pickFiles(){ haptic('light'); $('fileInput').click(); }
+  $('fileInput').addEventListener('change',e=>{ addAttachFiles([...e.target.files]); e.target.value=''; });
+  $('input').addEventListener('paste',e=>{
+    const files=[...((e.clipboardData&&e.clipboardData.files)||[])];
+    if(files.length){ e.preventDefault(); addAttachFiles(files); }
+  });
+
+  function addAttachFiles(files){
+    files.forEach((f,i)=>{
+      if(f.size>15*1024*1024){ showToast(f.name+': too big (15MB max)'); return; }
+      const a={name:f.name||('pasted-'+(attachments.length+i+1)+'.png'),path:null,uploading:true,error:null};
+      attachments.push(a);
+      uploadAttachment(f,a);
+    });
+    renderAttachments();
+  }
+
+  async function uploadAttachment(f,a){
+    try{
+      const res=await fetch('/upload?serverId='+encodeURIComponent(curServer)+'&name='+encodeURIComponent(a.name),{
+        method:'POST', headers:{'x-termi-token':token,'content-type':'application/octet-stream'}, body:f });
+      const j=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(j.error||('upload failed ('+res.status+')'));
+      a.path=j.path;
+    }catch(err){ a.error=err.message; showToast('upload failed: '+err.message); }
+    a.uploading=false;
+    renderAttachments();
+  }
+
+  function renderAttachments(){
+    const row=$('attachRow');
+    row.hidden=attachments.length===0;
+    row.innerHTML='';
+    attachments.forEach((a,i)=>{
+      const chip=document.createElement('span');
+      chip.className='attach-chip'+(a.error?' err':a.uploading?' up':'');
+      chip.innerHTML=`<span class="attach-chip-name"></span><button type="button" class="attach-chip-x" aria-label="Remove attachment">&times;</button>`;
+      chip.querySelector('.attach-chip-name').textContent=(a.uploading?'uploading… ':a.error?'failed: ':'')+a.name;
+      chip.querySelector('.attach-chip-x').addEventListener('click',()=>{ attachments.splice(i,1); renderAttachments(); haptic('light'); });
+      row.appendChild(chip);
+    });
+  }
+  function clearAttachments(){ if(attachments.length){ attachments=[]; renderAttachments(); } }
+
   // ── Send to agent ───────────────────────────────────
   function send(){
     const el=$('input');
-    const msg=el.value.trim();
-    if(!msg||!connected)return;
+    let msg=el.value.trim();
+    if(!connected)return;
+    if(attachments.some(a=>a.uploading)){ showToast('attachment still uploading...'); return; }
+    const files=attachments.filter(a=>a.path);
+    if(!msg&&files.length)msg='Look at the attached file'+(files.length>1?'s':'')+'.';
+    if(!msg)return;
     const btn=$('sendBtn');
     const r=btn.getBoundingClientRect();
     spawnParticles(r.left+r.width/2,r.top+r.height/2);
-    haptic('light'); addMsg('you',msg);
+    haptic('light');
+    addMsg('you',msg+(files.length?'\n\u{1F4CE} '+files.map(a=>a.name).join(', '):''));
+    const full=files.length? msg+'\n\n'+files.map(a=>'[Attached file: '+a.path+']').join('\n') : msg;
     el.value=''; resizeTA(el);
+    clearAttachments();
     setBusy(true);
-    socket.emit('chat',{message:msg,serverId:curServer});
+    socket.emit('chat',{message:full,serverId:curServer});
   }
   function quick(cmd){haptic('light');$('input').value=cmd;send();}
 

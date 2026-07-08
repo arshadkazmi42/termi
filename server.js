@@ -50,6 +50,50 @@ const LOCAL_ID = 'local';
 
 registry.setSecret(AUTH_TOKEN);
 
+// ── Attachment uploads ────────────────────────────────
+// Files/screenshots for the agent land on the TARGET server so the CLI
+// there can read them by path: WORK_DIR/.termi/uploads locally,
+// ~/.termi-uploads over SFTP for remote servers.
+const UPLOAD_DIR = path.join(WORK_DIR, '.termi', 'uploads');
+const UPLOAD_MAX = 15 * 1024 * 1024;
+const UPLOAD_TTL = 7 * 24 * 3600 * 1000;
+
+function pruneUploads() {
+  try {
+    if (!fs.existsSync(UPLOAD_DIR)) return;
+    for (const f of fs.readdirSync(UPLOAD_DIR)) {
+      const p = path.join(UPLOAD_DIR, f);
+      if (Date.now() - fs.statSync(p).mtimeMs > UPLOAD_TTL) fs.unlinkSync(p);
+    }
+  } catch (_) {}
+}
+pruneUploads();
+
+app.post('/upload', express.raw({ type: () => true, limit: UPLOAD_MAX }), async (req, res) => {
+  if (req.headers['x-termi-token'] !== AUTH_TOKEN) return res.status(401).json({ error: 'unauthorized' });
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'empty upload' });
+  const serverId = String(req.query.serverId || LOCAL_ID);
+  // Unique prefix + sanitized original name: collision-safe, still readable.
+  const safe = String(req.query.name || 'file').replace(/[^\w.\-]+/g, '-').replace(/^[.\-]+/, '').slice(-80) || 'file';
+  const name = Date.now().toString(36) + '-' + safe;
+  try {
+    if (serverId === LOCAL_ID) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true, mode: 0o755 });
+      const p = path.join(UPLOAD_DIR, name);
+      fs.writeFileSync(p, req.body, { mode: 0o644 }); // world-readable: claude runs as CLAUDE_USER
+      return res.json({ path: p });
+    }
+    const { stdout } = await remote.execOnServer(serverId, 'mkdir -p ~/.termi-uploads && echo "$HOME"');
+    const home = stdout.trim().split('\n').pop();
+    if (!home || !home.startsWith('/')) throw new Error('could not resolve remote home dir');
+    await remote.uploadBuffer(serverId, req.body, `.termi-uploads/${name}`);
+    res.json({ path: `${home}/.termi-uploads/${name}` });
+  } catch (err) {
+    console.log('[upload] failed:', serverId, err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // ── Per-server chat state ─────────────────────────────
 // Each target (local box or SSH server) gets its own queue + session.
 const chats = new Map(); // serverId → state
