@@ -94,6 +94,46 @@ app.post('/upload', express.raw({ type: () => true, limit: UPLOAD_MAX }), async 
   }
 });
 
+// ── File downloads ────────────────────────────────────
+// Deliberately narrow: only regular files under /tmp, symlinks resolved
+// BEFORE the check so /tmp/evil -> /etc/shadow can't escape. Token comes in
+// a header (fetch → blob client-side), never in the URL.
+const DOWNLOAD_ROOT = '/tmp/';
+const DOWNLOAD_MAX = 100 * 1024 * 1024;
+
+app.get('/download', async (req, res) => {
+  if (req.headers['x-termi-token'] !== AUTH_TOKEN) return res.status(401).json({ error: 'unauthorized' });
+  const serverId = String(req.query.serverId || LOCAL_ID);
+  const asked = path.posix.normalize(String(req.query.path || ''));
+  if (!asked.startsWith(DOWNLOAD_ROOT)) return res.status(403).json({ error: 'only files under /tmp can be downloaded (for now)' });
+  const fname = (path.posix.basename(asked) || 'file').replace(/[^\w.\-]+/g, '-');
+  const serve = (size, stream) => {
+    console.log('[download]', serverId, asked, size, 'bytes');
+    res.setHeader('content-type', 'application/octet-stream');
+    res.setHeader('content-length', size);
+    res.setHeader('content-disposition', `attachment; filename="${fname}"`);
+    stream.on('error', () => { try { res.destroy(); } catch (_) {} });
+    stream.pipe(res);
+  };
+  try {
+    if (serverId === LOCAL_ID) {
+      const real = fs.realpathSync(asked);
+      if (!real.startsWith(DOWNLOAD_ROOT)) return res.status(403).json({ error: 'path resolves outside /tmp' });
+      const st = fs.statSync(real);
+      if (!st.isFile()) return res.status(400).json({ error: 'not a regular file' });
+      if (st.size > DOWNLOAD_MAX) return res.status(413).json({ error: 'file larger than 100MB' });
+      return serve(st.size, fs.createReadStream(real));
+    }
+    const dl = await remote.openDownload(serverId, asked);
+    if (!dl.real.startsWith(DOWNLOAD_ROOT)) { dl.close(); return res.status(403).json({ error: 'path resolves outside /tmp' }); }
+    if (!dl.isFile) { dl.close(); return res.status(400).json({ error: 'not a regular file' }); }
+    if (dl.size > DOWNLOAD_MAX) { dl.close(); return res.status(413).json({ error: 'file larger than 100MB' }); }
+    serve(dl.size, dl.stream());
+  } catch (err) {
+    res.status(404).json({ error: err.code === 'ENOENT' ? 'file not found' : err.message });
+  }
+});
+
 // ── Per-server chat state ─────────────────────────────
 // Each target (local box or SSH server) gets its own queue + session.
 const chats = new Map(); // serverId → state
