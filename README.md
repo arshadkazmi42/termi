@@ -86,7 +86,10 @@ Nothing is copied to the target server — it already trusts your key (or passwo
 
 - **Dashboard** (`#/servers`) — the fleet. Status dots, session chips, search, add/edit/remove. "this server" is the hub itself.
 - **Screens** (`#/srv/<id>/screens`) — a server's `screen` sessions. Tap to open a terminal; **+ new screen** to create; **✎** to rename.
-- **Terminal** — full xterm attached via `screen -x` (the session keeps running when you leave). Mobile key bar, drag-to-scroll history (screen copy mode), split panes (desktop), and a full-screen mode.
+- **Terminal** — full xterm attached via `screen -A -x` (the session keeps running when you leave; `-A` sizes screen's window to *your* device, so lines wrap to the phone instead of being clipped at a laptop's width). Drag to scroll, mobile key bar, split panes (desktop), and a full-screen mode.
+  - **Select text**: long-press on the terminal, then drag; lifting your finger copies it (desktop: plain mouse drag). **copy** (key bar) copies the selection, or the whole visible screen. **hist** opens the session's scrollback (screen's `hardcopy -h`, raised to 10 000 lines) as plain selectable text — scroll, wrap, copy all — including everything printed while you were away.
+  - **🔔** (header) watches the session: the hub keeps its own display attached and sends a push notification when the output goes quiet — Claude finished, or is sitting on a permission prompt. Needs HTTPS; on iOS, add termi to the home screen first. Without push you still get an in-app toast + beep while the page is open.
+  - A laptop attached to the same session at the same time will see the phone-sized layout until it re-fits (`Ctrl-A F`).
 - **Chat** (`#/srv/<id>/chat`) — Cursor/Claude agent on that server, context kept per server via `--continue`.
 - **Analytics** (`#/analytics`) — fleet summary, per-server CPU/mem/disk/uptime, uptime %, and recent up/down incidents.
 
@@ -117,7 +120,10 @@ Environment variables (written to the install dir's `.env` by `deploy.sh`):
 | `AUTH_TOKEN` | `changeme` | UI login token **and** the encryption key for stored secrets |
 | `PORT` | `3619` | Port to serve on |
 | `WORK_DIR` | `/root/workspace` | Directory the local agent runs in |
-| `DATA_DIR` | `./data` | Where the encrypted registry and uptime history are stored |
+| `DATA_DIR` | `./data` | Where the encrypted registry, uptime history, push subscriptions and watch list are stored |
+| `NOTIFY_IDLE_MS` | `5000` | Quiet time after activity before a watched session notifies |
+| `SCREEN_SCROLLBACK` | `10000` | Scrollback lines termi asks screen to keep per session |
+| `PUSH_SUBJECT` | `mailto:termi@localhost` | VAPID contact for Web Push (keys are generated into `DATA_DIR/vapid.json`) |
 | `CLAUDE_USER` | `termi` | Non-root user to run Claude Code as (when hub runs as root) |
 
 State lives in `DATA_DIR`: `registry.json` (servers + encrypted keys/passwords) and `uptime.json` (downtime history). Back these up if you care about your server list — they're intentionally not in git.

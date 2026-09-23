@@ -1,6 +1,13 @@
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { io: ioClient } = require('socket.io-client');
+
+// Keep registry / watch list / push keys out of the real data dir.
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'termi-int-'));
+process.env.DATA_DIR = tmpDir;
 
 const { server, io, AUTH_TOKEN, resetState } = require('../../server');
 
@@ -37,7 +44,7 @@ describe('socket handlers', () => {
 
   after((_, done) => {
     io.close();
-    server.close(done);
+    server.close(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); done(); });
   });
 
   beforeEach(() => {
@@ -136,6 +143,61 @@ describe('socket handlers', () => {
       client.emit('screen:list');
       const data = await listPromise;
       assert.ok(Array.isArray(data.sessions));
+      client.disconnect();
+    });
+  });
+
+  describe('screen:history', () => {
+    it('rejects an invalid session name', async () => {
+      const client = connectClient();
+      await waitEvent(client, 'connect');
+      const p = waitEvent(client, 'screen:history');
+      client.emit('screen:history', { sessionName: 'bad name; rm -rf /' });
+      const res = await p;
+      assert.match(res.error, /Invalid session name/);
+      client.disconnect();
+    });
+  });
+
+  describe('notifications', () => {
+    it('sends the watch list on connect and on request', async () => {
+      const client = connectClient();
+      const first = await waitEvent(client, 'watch:list');
+      assert.ok(Array.isArray(first.watches));
+      const p = waitEvent(client, 'watch:list');
+      client.emit('watch:list');
+      assert.ok(Array.isArray((await p).watches));
+      client.disconnect();
+    });
+
+    it('rejects a watch on a non-numeric pid', async () => {
+      const client = connectClient();
+      await waitEvent(client, 'connect');
+      const p = waitEvent(client, 'servers:error');
+      client.emit('watch:set', { serverId: 'local', pid: 'abc; ls', name: 'x', on: true });
+      assert.match((await p).message, /Invalid session/);
+      client.disconnect();
+    });
+
+    it('answers push:key with a VAPID public key (when web-push is installed)', async () => {
+      const client = connectClient();
+      await waitEvent(client, 'connect');
+      const res = await new Promise((resolve) => client.emit('push:key', null, resolve));
+      if (res.available) assert.ok(typeof res.key === 'string' && res.key.length > 40);
+      else assert.equal(res.key, null);
+      client.disconnect();
+    });
+
+    it('stores a push subscription and rejects junk', async () => {
+      const client = connectClient();
+      await waitEvent(client, 'connect');
+      let p = waitEvent(client, 'push:subscribed');
+      client.emit('push:subscribe', { subscription: { endpoint: 'https://push.example/x', keys: { p256dh: 'a', auth: 'b' } } });
+      assert.equal((await p).ok, true);
+      p = waitEvent(client, 'push:subscribed');
+      client.emit('push:subscribe', { subscription: { nope: 1 } });
+      assert.equal((await p).ok, false);
+      client.emit('push:unsubscribe', { endpoint: 'https://push.example/x' });
       client.disconnect();
     });
   });

@@ -10,6 +10,8 @@ const os = require('os');
 const registry = require('./lib/registry');
 const remote = require('./lib/remote');
 const monitor = require('./lib/monitor');
+const notify = require('./lib/notify');
+const { altScreenFilter, cleanHardcopy } = require('./lib/termfilter');
 
 const execAsync = util.promisify(exec);
 
@@ -366,14 +368,34 @@ async function listScreenSessions(serverId = LOCAL_ID) {
   try {
     if (serverId === LOCAL_ID) {
       const { stdout } = await execAsync('screen -ls', { timeout: 5000 });
-      return parseScreenLs(stdout);
+      return annotateSessions(serverId, parseScreenLs(stdout));
     }
     const { stdout } = await remote.execOnServer(serverId, 'screen -ls', { timeout: 10000 });
-    return parseScreenLs(stdout);
+    return annotateSessions(serverId, parseScreenLs(stdout));
   } catch (err) {
-    if (err.stdout) return parseScreenLs(err.stdout);
+    if (err.stdout) return annotateSessions(serverId, parseScreenLs(err.stdout));
     return [];
   }
+}
+
+// A watched session always has the hub's own watcher display attached, so
+// `screen -ls` would call it "attached" forever. For those, report what the
+// user cares about: is a termi client on it right now?
+function clientAttached(serverId, pid, visibleOnly) {
+  for (const entry of screenPtys.values()) {
+    if (entry.serverId !== serverId || entry.sessionName.split('.')[0] !== String(pid)) continue;
+    if (!visibleOnly || (entry.socket && entry.socket.data && entry.socket.data.visible !== false)) return true;
+  }
+  return false;
+}
+function annotateSessions(serverId, sessions) {
+  for (const s of sessions) {
+    if (watchers.has(notify.watchKey(serverId, s.pid))) {
+      s.watched = true;
+      s.status = clientAttached(serverId, s.pid) ? 'attached' : 'detached';
+    }
+  }
+  return sessions;
 }
 
 function parseScreenLs(output) {
@@ -394,8 +416,8 @@ function parseScreenLs(output) {
   return sessions;
 }
 
-function openLocalPty(sessionName, cols, rows) {
-  const term = pty.spawn('screen', ['-x', sessionName], {
+function spawnLocalScreen(args, cols, rows) {
+  const term = pty.spawn('screen', args, {
     name: 'xterm-256color',
     cols: cols || 80,
     rows: rows || 24,
@@ -411,6 +433,65 @@ function openLocalPty(sessionName, cols, rows) {
   };
 }
 
+// Browser attaches use `screen -A -x`: -A adapts the shared window to THIS
+// display's size. Without it screen keeps whatever size the last display
+// had (a 200-col laptop), and a phone sees every line clipped.
+const ATTACH_ARGS = (sessionName) => ['-A', '-x', sessionName];
+
+function openLocalPty(sessionName, cols, rows) {
+  return spawnLocalScreen(ATTACH_ARGS(sessionName), cols, rows);
+}
+
+// Run the client-bound byte stream through the alt-screen filter so
+// xterm.js keeps native scrollback (see lib/termfilter.js).
+function filterHandle(handle) {
+  const filter = altScreenFilter();
+  return {
+    ...handle,
+    onData: (fn) => handle.onData((d) => { const out = filter(d); if (out) fn(out); }),
+  };
+}
+
+// screen's default history is 100 lines — useless for reading what an
+// agent did while you were away. Raise it once per session (per hub run).
+const SCROLLBACK_LINES = parseInt(process.env.SCREEN_SCROLLBACK || '10000', 10);
+const scrollbackBumped = new Set();
+function bumpScrollback(serverId, sessionName) {
+  const key = `${serverId}:${sessionName.split('.')[0]}`;
+  if (scrollbackBumped.has(key)) return;
+  scrollbackBumped.add(key);
+  const cmd = `screen -S ${sessionName} -X scrollback ${SCROLLBACK_LINES}`;
+  const run = serverId === LOCAL_ID
+    ? execAsync(cmd, { timeout: 5000 })
+    : remote.execOnServer(serverId, cmd, { timeout: 10000 });
+  run.catch((err) => { scrollbackBumped.delete(key); console.log('[screen] scrollback bump failed:', serverId, sessionName, err.message); });
+}
+
+// The window's scrollback + screen as plain text (`hardcopy -h`), for the
+// history sheet: scroll, select, copy — even what happened while away.
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+async function screenHistory(serverId, sessionName) {
+  if (!SAFE_SESSION.test(sessionName)) throw new Error('Invalid session name');
+  const tmp = `/tmp/termi-hc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  if (serverId === LOCAL_ID) {
+    await execAsync(`screen -S ${sessionName} -X hardcopy -h ${tmp}`, { timeout: 5000 });
+    // hardcopy is written by the session process right after the message
+    // lands; give it a moment (and one more on a slow box).
+    let text = null;
+    for (let i = 0; i < 4 && text === null; i++) {
+      await sleep(i === 0 ? 250 : 400);
+      try { text = fs.readFileSync(tmp, 'utf8'); } catch (_) { text = null; }
+    }
+    try { fs.unlinkSync(tmp); } catch (_) {}
+    if (text === null) throw new Error('screen did not write the history file');
+    return cleanHardcopy(text);
+  }
+  const { stdout, stderr, code } = await remote.execOnServer(serverId,
+    `screen -S ${sessionName} -X hardcopy -h ${tmp} && sleep 0.4 && cat ${tmp}; s=$?; rm -f ${tmp}; exit $s`, { timeout: 20000 });
+  if (code !== 0 && !stdout) throw new Error((stderr || 'hardcopy failed').trim().split('\n')[0]);
+  return cleanHardcopy(stdout);
+}
+
 async function attachScreen(socket, serverId, sessionName, cols, rows) {
   if (!SAFE_SESSION.test(sessionName)) {
     socket.emit('screen:exit', { serverId, sessionName, exitCode: -1, error: 'Invalid session name' });
@@ -423,9 +504,9 @@ async function attachScreen(socket, serverId, sessionName, cols, rows) {
 
   let handle;
   try {
-    handle = serverId === LOCAL_ID
+    handle = filterHandle(serverId === LOCAL_ID
       ? openLocalPty(sessionName, cols, rows)
-      : await remote.openRemotePty(serverId, `screen -x ${sessionName}`, { cols: cols || 80, rows: rows || 24 });
+      : await remote.openRemotePty(serverId, `screen ${ATTACH_ARGS(sessionName).join(' ')}`, { cols: cols || 80, rows: rows || 24 }));
   } catch (err) {
     console.log('[screen] attach failed:', serverId, sessionName, err.message);
     socket.emit('screen:exit', { serverId, sessionName, exitCode: -1, error: err.message });
@@ -447,7 +528,8 @@ async function attachScreen(socket, serverId, sessionName, cols, rows) {
     socket.emit('screen:exit', { serverId, sessionName, exitCode });
   });
 
-  screenPtys.set(key, { handle, sessionName });
+  screenPtys.set(key, { handle, sessionName, serverId, socket });
+  bumpScrollback(serverId, sessionName);
 }
 
 function detachScreen(socket, serverId, sessionName) {
@@ -487,6 +569,117 @@ function sendScreenInput(socket, serverId, sessionName, data) {
 function resizeScreenPty(socket, serverId, sessionName, cols, rows) {
   const entry = screenPtys.get(`${socket.id}:${serverId}:${sessionName}`);
   if (entry) entry.handle.resize(cols, rows);
+}
+
+// ── Session watchers → notifications ──────────────────
+// A watched session keeps a hub-side display attached (`screen -x <pid>`,
+// never resized, never -A so it can't fight the user's window size). Its
+// output drives an IdleDetector; when a run goes quiet the user gets a push.
+const watchers = new Map(); // watchKey → { entry, handle, detector, retry, fails, stopped, lastNotified }
+const WATCH_COLS = 200, WATCH_ROWS = 50;
+const NOTIFY_IDLE_MS = parseInt(process.env.NOTIFY_IDLE_MS || '5000', 10);
+const NOTIFY_COOLDOWN_MS = 10000;
+
+function openWatchPty(serverId, pid) {
+  return serverId === LOCAL_ID
+    ? Promise.resolve(spawnLocalScreen(['-x', String(pid)], WATCH_COLS, WATCH_ROWS))
+    : remote.openRemotePty(serverId, `screen -x ${pid}`, { cols: WATCH_COLS, rows: WATCH_ROWS });
+}
+
+async function startWatcher(entry) {
+  const key = notify.watchKey(entry.serverId, entry.pid);
+  let w = watchers.get(key);
+  if (w && (w.handle || w.starting)) return;
+  if (!w) { w = { entry, handle: null, detector: null, retry: null, fails: 0, stopped: false, lastNotified: 0 }; watchers.set(key, w); }
+  w.entry = entry; w.starting = true;
+  let handle;
+  try { handle = await openWatchPty(entry.serverId, entry.pid); }
+  catch (err) { w.starting = false; scheduleWatchRetry(w, err); return; }
+  w.starting = false;
+  if (w.stopped) { try { handle.kill(); } catch (_) {} return; }
+  w.handle = handle;
+  const det = new notify.IdleDetector({ idleMs: NOTIFY_IDLE_MS, onIdle: (info) => onSessionIdle(w, info) });
+  w.detector = det;
+  handle.onData((d) => det.feed(d));
+  handle.onExit(async () => {
+    det.dispose();
+    if (w.handle !== handle) return;
+    w.handle = null; w.detector = null;
+    if (w.stopped) return;
+    // Kicked off (someone ran `screen -d`) or the session died. Reattach if
+    // it still exists, otherwise forget it.
+    let alive = false;
+    try { alive = (await listScreenSessions(entry.serverId)).some(s => s.pid === String(entry.pid)); } catch (_) {}
+    if (alive) scheduleWatchRetry(w, null);
+    else { console.log('[watch] session gone:', key); setWatch(entry.serverId, entry.pid, entry.name, false); }
+  });
+  w.fails = 0;
+  console.log('[watch] attached:', key, entry.name);
+}
+
+function scheduleWatchRetry(w, err) {
+  if (w.stopped) return;
+  w.fails++;
+  const delay = Math.min(60000, 2000 * Math.pow(2, Math.min(w.fails, 6) - 1));
+  if (err) console.log('[watch] attach failed:', notify.watchKey(w.entry.serverId, w.entry.pid), err.message, '— retry in', delay, 'ms');
+  clearTimeout(w.retry);
+  w.retry = setTimeout(() => startWatcher(w.entry), delay);
+  if (w.retry.unref) w.retry.unref();
+}
+
+function stopWatcher(key) {
+  const w = watchers.get(key);
+  if (!w) return;
+  w.stopped = true;
+  clearTimeout(w.retry);
+  if (w.detector) w.detector.dispose();
+  const h = w.handle; w.handle = null;
+  if (h) { try { h.write('\x01d'); } catch (_) {} setTimeout(() => { try { h.kill(); } catch (_) {} }, 500); }
+  watchers.delete(key);
+}
+
+function setWatch(serverId, pid, name, on) {
+  pid = String(pid);
+  if (on) {
+    const entry = { serverId, pid, name: String(name || pid) };
+    notify.addWatch(entry);
+    startWatcher(entry);
+  } else {
+    notify.removeWatch(serverId, pid);
+    stopWatcher(notify.watchKey(serverId, pid));
+  }
+  io.emit('watch:list', { watches: notify.listWatches() });
+}
+
+function startWatchers() {
+  for (const entry of notify.listWatches()) startWatcher(entry);
+}
+
+function serverName(serverId) {
+  if (serverId === LOCAL_ID) return os.hostname();
+  const s = registry.listServers().find(x => x.id === serverId);
+  return s ? s.name : serverId;
+}
+
+async function onSessionIdle(w, info) {
+  const { serverId, pid, name } = w.entry;
+  // Someone is looking at it in termi right now — nothing to announce.
+  if (clientAttached(serverId, pid, true)) return;
+  const now = Date.now();
+  if (now - w.lastNotified < NOTIFY_COOLDOWN_MS) return;
+  w.lastNotified = now;
+  const fullName = `${pid}.${name}`;
+  const payload = {
+    title: `${name} · ${serverName(serverId)}`,
+    body: (info.needsInput ? 'waiting for your input' : 'finished — waiting for you') + (info.snippet ? `\n${info.snippet}` : ''),
+    url: `/#/srv/${encodeURIComponent(serverId)}/screen/${encodeURIComponent(fullName)}`,
+    tag: `termi-${serverId}-${pid}`,
+    ts: now,
+  };
+  console.log('[watch] idle:', serverId, fullName, info.needsInput ? 'needs input' : 'done', `(${info.runMs}ms, ${info.bytes}B)`);
+  let res = { sent: 0 };
+  try { res = await notify.sendPush(payload); } catch (err) { console.log('[push] error:', err.message); }
+  io.emit('notify', { ...payload, serverId, sessionName: fullName, needsInput: !!info.needsInput, pushed: res.sent > 0 });
 }
 
 // ── Metrics (analytics page) ──────────────────────────
@@ -567,7 +760,7 @@ async function probeAndEmit(serverId, force) {
     };
   } else {
     const probe = await remote.probeServer(serverId);
-    const sessions = probe.screenLs ? parseScreenLs(probe.screenLs) : [];
+    const sessions = probe.screenLs ? annotateSessions(serverId, parseScreenLs(probe.screenLs)) : [];
     result = {
       online: probe.online,
       hasScreen: !!probe.hasScreen,
@@ -603,6 +796,12 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   console.log('[socket] connected:', socket.id, 'transport:', socket.conn.transport.name);
+  socket.data.visible = true;
+  socket.emit('watch:list', { watches: notify.listWatches() });
+
+  // Page visibility, so an idle notification isn't pushed to a phone that
+  // is looking at the session already.
+  socket.on('client:visible', (p) => { socket.data.visible = !(p && p.visible === false); });
 
   socket.on('init', async (payload) => {
     const serverId = (payload && payload.serverId) || LOCAL_ID;
@@ -752,6 +951,9 @@ io.on('connection', (socket) => {
       else await remote.execOnServer(serverId, cmd, { timeout: 12000 });
       probeCache.delete(serverId);
       const pid = sessionName.split('.')[0];
+      notify.renameWatch(serverId, pid, clean);
+      const w = watchers.get(notify.watchKey(serverId, pid));
+      if (w) w.entry.name = clean;
       io.emit('screen:renamed', { serverId, oldFullName: sessionName, newFullName: `${pid}.${clean}` });
       const sessions = await listScreenSessions(serverId);
       io.emit('screen:list', { serverId, sessions });
@@ -776,6 +978,53 @@ io.on('connection', (socket) => {
 
   socket.on('screen:resize', ({ sessionName, cols, rows, serverId = LOCAL_ID }) => {
     resizeScreenPty(socket, serverId, sessionName, cols, rows);
+  });
+
+  socket.on('screen:history', async ({ sessionName, serverId = LOCAL_ID }) => {
+    try {
+      const text = await screenHistory(serverId, String(sessionName || ''));
+      socket.emit('screen:history', { serverId, sessionName, text });
+    } catch (err) {
+      socket.emit('screen:history', { serverId, sessionName, error: err.message });
+    }
+  });
+
+  // ── Notifications ──────────────────────────────────
+  socket.on('watch:list', () => socket.emit('watch:list', { watches: notify.listWatches() }));
+
+  socket.on('watch:set', ({ serverId = LOCAL_ID, pid, name, on }) => {
+    pid = String(pid || '');
+    if (!/^\d+$/.test(pid)) { socket.emit('servers:error', { message: 'Invalid session' }); return; }
+    const clean = String(name || '').replace(/[^\w.\-]/g, '-').slice(0, 40) || pid;
+    console.log('[watch]', on ? 'on' : 'off', serverId, pid, clean);
+    setWatch(serverId, pid, clean, !!on);
+  });
+
+  socket.on('push:key', (_, cb) => {
+    if (typeof cb === 'function') cb({ key: notify.publicKey(), available: notify.pushAvailable() });
+  });
+
+  socket.on('push:subscribe', ({ subscription, ua }) => {
+    try {
+      const n = notify.addSubscription(subscription, { ua });
+      console.log('[push] subscribed device, total:', n);
+      socket.emit('push:subscribed', { ok: true, total: n });
+    } catch (err) {
+      socket.emit('push:subscribed', { ok: false, error: err.message });
+    }
+  });
+
+  socket.on('push:unsubscribe', ({ endpoint }) => {
+    if (endpoint) notify.removeSubscription(String(endpoint));
+  });
+
+  // Fire a push right now so a phone can confirm the whole chain works.
+  socket.on('push:test', async () => {
+    const payload = { title: 'termi', body: 'push notifications are working', url: '/', tag: 'termi-test', ts: Date.now() };
+    let res = { sent: 0, total: 0 };
+    try { res = await notify.sendPush(payload); } catch (_) {}
+    socket.emit('push:test', res);
+    if (!res.sent) io.emit('notify', { ...payload, pushed: false });
   });
 
   // ── Server registry events (dashboard) ─────────────
@@ -840,6 +1089,8 @@ io.on('connection', (socket) => {
       metricsCache.delete(id);
       monitor.forget(id);
       chats.delete(id);
+      for (const w of notify.listWatches()) if (w.serverId === id) stopWatcher(notify.watchKey(id, w.pid));
+      notify.removeServerWatches(id);
       io.emit('servers:list', serverListPayload());
     } catch (err) {
       socket.emit('servers:error', { message: err.message });
@@ -912,6 +1163,8 @@ function startMonitor() {
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Agent UI on port ${PORT} | workdir: ${WORK_DIR}`));
   startMonitor();
+  startWatchers();
+  console.log('[push]', notify.pushAvailable() ? 'web-push ready' : 'web-push not installed — in-app alerts only');
 }
 
 // ── Exports for testing ──────────────────────────────────
@@ -921,6 +1174,8 @@ module.exports = {
   parseMetrics,
   listScreenSessions,
   screenPtys,
+  watchers,
+  screenHistory,
   spawnRunner,
   runCommand,
   chatState,

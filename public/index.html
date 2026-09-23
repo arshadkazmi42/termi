@@ -789,6 +789,31 @@
   }
   .stv-key:active { background: var(--green); color: #fff; transform: scale(0.94); }
   .stv-key.kbd { color: var(--green); }
+  .stv-back.on { background: var(--green); color: #fff; border-color: var(--green); }
+
+  /* History sheet — the session's scrollback as plain, selectable text */
+  .sheet-tall { max-height: 88vh; height: 88vh; }
+  .hist-head { display: flex; align-items: center; gap: 6px; }
+  .hist-head .hist-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hist-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+    font-family: var(--mono); font-size: 11px; font-weight: 600; border-radius: 7px;
+    padding: 5px 9px; cursor: pointer; flex-shrink: 0;
+  }
+  .hist-btn.on { color: var(--green); border-color: var(--green); }
+  .hist-btn:active { background: var(--green); color: #fff; }
+  .hist-body {
+    flex: 1; min-height: 0; overflow: auto; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  }
+  .hist-text {
+    margin: 0; padding: 8px 10px; font-family: var(--mono); font-size: 11px; line-height: 1.45;
+    color: var(--text); white-space: pre; tab-size: 4;
+    user-select: text; -webkit-user-select: text; -webkit-touch-callout: default;
+  }
+  .hist-text.wrap { white-space: pre-wrap; word-break: break-all; }
+  .hist-note { font-family: var(--mono); font-size: 10px; color: var(--dim); padding: 6px 4px 0; flex-shrink: 0; }
 
   /* iOS Safari auto-zooms the page when a focused input's font is under
      16px, which pans the fixed-height UI off-screen. */
@@ -1181,6 +1206,20 @@
 <div id="reconnectBanner">connection lost - reconnecting...</div>
 
 <!-- New-tab picker: every server's screens, one sheet -->
+<div class="sheet-backdrop" id="histWrap" hidden>
+  <div class="sheet sheet-tall" role="dialog" aria-modal="true" aria-label="Session history">
+    <div class="sheet-grip"></div>
+    <div class="sheet-title hist-head">
+      <span class="hist-title" id="histTitle">history</span>
+      <button type="button" class="hist-btn" id="histWrapBtn" aria-label="Toggle line wrapping">wrap</button>
+      <button type="button" class="hist-btn" id="histCopyBtn" aria-label="Copy the whole history to the clipboard">copy all</button>
+      <button type="button" class="hist-btn" id="histCloseBtn" aria-label="Close history">&times;</button>
+    </div>
+    <div class="sheet-body hist-body" id="histBody"><pre class="hist-text" id="histText"></pre></div>
+    <div class="hist-note" id="histNote"></div>
+  </div>
+</div>
+
 <div class="sheet-backdrop" id="tabPickerWrap" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Open a screen in a new tab">
     <div class="sheet-grip"></div>
@@ -1381,6 +1420,7 @@
       <a class="stv-back" id="addPaneBtn" href="#/screens" hidden aria-label="Open another session in a split pane" style="padding:5px 9px">+ split</a>
       <button type="button" class="stv-back" onclick="screenFocusInput()" aria-label="Focus the terminal for direct keyboard typing" style="padding:5px 9px">kbd</button>
       <button type="button" class="stv-back" onclick="toggleTermFullscreen()" aria-label="Full screen — hide all chrome for a bigger terminal" style="padding:5px 9px">full</button>
+      <button type="button" class="stv-back" id="watchBtn" onclick="toggleWatch()" hidden aria-label="Notify me when this session goes quiet (Claude done or waiting)" style="padding:5px 9px;font-size:14px">&#128276;</button>
     </div>
     <div id="screenTermContainer" class="panes-1"></div>
     <button type="button" class="term-fs-exit" onclick="toggleTermFullscreen(false)" aria-label="Exit full screen">&#10005; exit full</button>
@@ -1401,7 +1441,9 @@
       <button type="button" class="stv-key" data-seq="left" aria-label="Send Arrow Left">&larr;</button>
       <button type="button" class="stv-key" data-seq="right" aria-label="Send Arrow Right">&rarr;</button>
       <button type="button" class="stv-key" data-seq="tab" aria-label="Send Tab key">tab</button>
-      <button type="button" class="stv-key kbd" data-seq="copy" aria-label="Enter screen scrollback mode (Ctrl+A left-bracket) — then drag or use arrows to scroll, esc to exit">scroll</button>
+      <button type="button" class="stv-key kbd" data-action="copy" aria-label="Copy the selected text, or the whole visible screen, to the clipboard. Long-press and drag on the terminal to select">copy</button>
+      <button type="button" class="stv-key kbd" data-action="hist" aria-label="Open the session history as selectable text — scroll, search, copy">hist</button>
+      <button type="button" class="stv-key" data-seq="copy" aria-label="Enter screen's own scrollback mode (Ctrl+A left-bracket) — drag or use arrows to scroll, esc to exit">scr</button>
       <button type="button" class="stv-key" data-seq="pgup" aria-label="Send Page Up">pgup</button>
       <button type="button" class="stv-key" data-seq="pgdn" aria-label="Send Page Down">pgdn</button>
       <button type="button" class="stv-key" data-seq="esc" aria-label="Send Escape key">esc</button>
@@ -1554,8 +1596,11 @@
       // creates join themselves, and a double join replaces the fresh pty
       // whose exit then reads as "session ended".
       screenPanes.forEach((p,k)=>{
-        socket.emit('screen:join',{serverId:p.serverId,sessionName:k,cols:p.term.cols||80,rows:p.term.rows||24});
+        p.sentCols=p.term.cols||80; p.sentRows=p.term.rows||24;
+        socket.emit('screen:join',{serverId:p.serverId,sessionName:k,cols:p.sentCols,rows:p.sentRows});
       });
+      sendVisibility();
+      socket.emit('watch:list');
       applyRoute();   // render the current view and request its data now
       if(route.view==='servers')socket.emit('servers:list');
     });
@@ -1633,6 +1678,28 @@
       if(serverId&&route.server&&serverId!==route.server)return;
       if(error)showToast(error);
       handleScreenExit(sessionName);
+    });
+    socket.on('screen:history',({sessionName,text,error})=>{
+      if(histFor!==sessionName)return;
+      if(error){ $('histNote').textContent='full history unavailable ('+error+') — showing what this page has seen'; return; }
+      $('histText').textContent=text||'(empty)';
+      $('histNote').textContent=(text?text.split('\n').length:0)+' lines from screen\'s scrollback';
+      scrollHistToBottom();
+    });
+    socket.on('watch:list',({watches:w})=>{ watches=w||[]; updateWatchBtn(); });
+    socket.on('push:subscribed',({ok,error})=>{ if(!ok)showToast('push subscribe failed: '+error); });
+    socket.on('push:test',(res)=>{ showToast(res.sent?('test push sent to '+res.sent+' device'+(res.sent>1?'s':'')):'no push devices subscribed'); });
+    // A watched session went quiet: Claude finished, or it is waiting on you.
+    socket.on('notify',(n)=>{
+      playNotif(); haptic('medium');
+      const first=(n.body||'').split('\n')[0];
+      showToast((n.title||'session')+' — '+first);
+      if(!n.pushed&&document.hidden&&'Notification' in window&&Notification.permission==='granted'){
+        const opts={body:n.body,tag:n.tag,data:{url:n.url}};
+        if(navigator.serviceWorker&&navigator.serviceWorker.ready){
+          navigator.serviceWorker.ready.then(r=>r.showNotification(n.title,opts)).catch(()=>{ try{ new Notification(n.title,opts); }catch(_){} });
+        } else { try{ new Notification(n.title,opts); }catch(_){} }
+      }
     });
     // A rename changes the fullName — remap any open pane, tab, and the URL.
     socket.on('screen:renamed',({serverId,oldFullName,newFullName})=>{
@@ -1782,7 +1849,7 @@
     if(r.server)$('termBackBtn').setAttribute('href',srvHash(r.server,'screens'));
     if(r.view!=='term')$('app').classList.remove('term-fs'); // full screen is terminal-only
     applyViewportHeight();
-    if(r.view==='term'){ setTimeout(refitAllPanes,60); setTimeout(refitAllPanes,220); }
+    if(r.view==='term'){ setTimeout(refitAllPanes,60); scheduleRefit(250); }
   }
 
   function updateScreensChrome(){
@@ -2570,15 +2637,52 @@
   // local scrollback: history lives inside `screen`, reachable only via its
   // copy mode (Ctrl+A [, the "scroll" key below). While copy mode is active
   // drags scroll by sending arrow keys; otherwise we point at the button.
+  // Touch → terminal cell, in absolute buffer rows (what term.select wants).
+  function touchCell(term,el,t){
+    const scr=el.querySelector('.xterm-screen')||el;
+    const r=scr.getBoundingClientRect();
+    const dim=term._core?._renderService?.dimensions?.css?.cell;
+    const cw=(dim&&dim.width)||(r.width/term.cols)||8, ch=(dim&&dim.height)||(r.height/term.rows)||16;
+    const col=Math.max(0,Math.min(term.cols-1,Math.floor((t.clientX-r.left)/cw)));
+    const vrow=Math.max(0,Math.min(term.rows-1,Math.floor((t.clientY-r.top)/ch)));
+    return {col,row:term.buffer.active.viewportY+vrow};
+  }
+  function selectRange(term,a,b){
+    let s=a,e=b;
+    if(e.row<s.row||(e.row===s.row&&e.col<s.col)){s=b;e=a;}
+    term.select(s.col,s.row,(e.row-s.row)*term.cols+(e.col-s.col)+1);
+  }
+
+  // One finger on the terminal: drag scrolls; hold still for a moment and
+  // the drag selects instead (xterm.js has no touch selection of its own).
+  // Releasing copies the selection and leaves it highlighted.
+  const LONG_PRESS_MS=450, MOVE_SLOP=8;
   function enableTouchScroll(term,el,fullName){
     let lastY=null,carry=0,lastHint=0;
+    let pressTimer=null,startX=0,startY=0,anchor=null,selecting=false;
+    const cancelPress=()=>{ clearTimeout(pressTimer); pressTimer=null; };
     el.addEventListener('touchstart',e=>{
+      cancelPress(); selecting=false;
       if(e.touches.length!==1){lastY=null;return;}
-      lastY=e.touches[0].clientY; carry=0;
+      const t=e.touches[0];
+      lastY=t.clientY; carry=0; startX=t.clientX; startY=t.clientY;
+      pressTimer=setTimeout(()=>{
+        pressTimer=null; selecting=true;
+        anchor=touchCell(term,el,t);
+        selectRange(term,anchor,anchor);
+        haptic('medium'); showToast('drag to select · lift to copy');
+      },LONG_PRESS_MS);
     },{passive:true});
     el.addEventListener('touchmove',e=>{
       if(lastY===null||e.touches.length!==1)return;
-      const y=e.touches[0].clientY;
+      const t=e.touches[0];
+      if(selecting){
+        selectRange(term,anchor,touchCell(term,el,t));
+        if(e.cancelable)e.preventDefault();
+        return;
+      }
+      if(pressTimer&&(Math.abs(t.clientX-startX)>MOVE_SLOP||Math.abs(t.clientY-startY)>MOVE_SLOP))cancelPress();
+      const y=t.clientY;
       const cell=term._core?._renderService?.dimensions?.css?.cell?.height
         ||(term.rows?el.clientHeight/term.rows:16)||16;
       carry+=lastY-y; lastY=y;
@@ -2593,13 +2697,22 @@
             data:(lines>0?'\x1b[B':'\x1b[A').repeat(Math.min(Math.abs(lines),term.rows||24))});
         }else if(Date.now()-lastHint>3000){
           lastHint=Date.now();
-          showToast(keysShown?'tap "scroll" below to scroll history':'tap "keys" then "scroll" to scroll history');
+          showToast(keysShown?'tap "scr" below for screen\'s own history':'tap "keys" then "scr" for screen\'s own history');
         }
       }
       if(e.cancelable)e.preventDefault(); // keep the page from panning/bouncing
     },{passive:false});
-    el.addEventListener('touchend',()=>{lastY=null;},{passive:true});
-    el.addEventListener('touchcancel',()=>{lastY=null;},{passive:true});
+    el.addEventListener('touchend',()=>{
+      cancelPress(); lastY=null;
+      if(!selecting)return;
+      selecting=false;
+      const text=term.getSelection();
+      if(text&&text.trim()){ const n=text.split('\n').length; copyText(text,n>1?n+' lines':'selection'); }
+      else term.clearSelection();
+    },{passive:true});
+    el.addEventListener('touchcancel',()=>{ cancelPress(); lastY=null; selecting=false; },{passive:true});
+    // Android fires contextmenu at long-press time — that is our gesture.
+    el.addEventListener('contextmenu',e=>{ if(selecting||pressTimer)e.preventDefault(); });
   }
 
   function createPane(fullName){
@@ -2641,16 +2754,23 @@
     const sid=route.server||curServer; // panes belong to the server they were opened on
     enableTouchScroll(term,pane.querySelector('.scr-pane-term'),fullName);
     term.onData(d=>{const clean=stripMouseReports(d);if(socket&&clean)socket.emit('screen:input',{serverId:sid,sessionName:fullName,data:clean});});
-    screenPanes.set(fullName,{term,fit,paneEl:pane,name:meta.name,status:meta.status,serverId:sid});
+    const p={term,fit,paneEl:pane,name:meta.name,status:meta.status,serverId:sid,sentCols:0,sentRows:0};
+    screenPanes.set(fullName,p);
     pane.addEventListener('mousedown',()=>focusPane(fullName));
     pane.addEventListener('touchstart',()=>focusPane(fullName),{passive:true});
     pane.querySelector('.scr-pane-close').addEventListener('click',e=>{
       e.stopPropagation(); e.preventDefault(); closePaneNav(fullName);
     });
     updatePaneGrid();
-    socket.emit('screen:join',{serverId:sid,sessionName:fullName,cols:term.cols||80,rows:term.rows||24});
-    const sync=()=>{try{fit.fit();socket.emit('screen:resize',{serverId:sid,sessionName:fullName,cols:term.cols,rows:term.rows});}catch(_){}};
-    setTimeout(sync,120); setTimeout(sync,320);
+    // Fit BEFORE joining: the attach (-A) sizes screen's window to whatever
+    // we send, and a join at the 80×24 default followed by a resize makes the
+    // program redraw twice.
+    try{fit.fit();}catch(_){}
+    const sane=term.cols>=MIN_COLS&&term.rows>=MIN_ROWS;
+    p.sentCols=sane?term.cols:80; p.sentRows=sane?term.rows:24;
+    socket.emit('screen:join',{serverId:sid,sessionName:fullName,cols:p.sentCols,rows:p.sentRows});
+    const sync=()=>{try{fit.fit();syncPtySize(p,fullName);}catch(_){}};
+    setTimeout(sync,150); setTimeout(sync,400);
   }
 
   function removePane(fullName,notify){
@@ -2697,6 +2817,7 @@
       $('termName').textContent='';
       st.textContent=''; st.className='stv-status';
       $('termInput').placeholder='no session';
+      updateWatchBtn();
       return;
     }
     $('termName').textContent=p.name+(screenPanes.size>1?' +'+(screenPanes.size-1):'');
@@ -2704,6 +2825,7 @@
     st.textContent=(live?'live':'idle')+' · '+p.term.cols+'×'+p.term.rows;
     st.className='stv-status '+(live?'live':'idle');
     $('termInput').placeholder='send to '+p.name+'...';
+    updateWatchBtn();
   }
 
   function updatePaneGrid(){
@@ -2751,22 +2873,44 @@
     // Terminal area just changed size — refit and tell the pty its new rows/cols.
     applyViewportHeight();
     setTimeout(refitAllPanes,60);
-    setTimeout(refitAllPanes,260);
+    scheduleRefit(300);
   }
 
+  // Tell the pty about a size change only when there is one. A bogus tiny
+  // size from a half-laid-out container must never go out: with -A it would
+  // shrink the shared screen window for every other display too.
+  const MIN_COLS=20, MIN_ROWS=4;
+  function syncPtySize(p,k,force){
+    const cols=p.term.cols, rows=p.term.rows;
+    if(!(cols>=MIN_COLS&&rows>=MIN_ROWS))return;
+    if(!force&&p.sentCols===cols&&p.sentRows===rows)return;
+    p.sentCols=cols; p.sentRows=rows;
+    if(socket&&connected)socket.emit('screen:resize',{serverId:p.serverId,sessionName:k,cols,rows});
+  }
+
+  // Font size depends on width and pane count only — the soft keyboard
+  // changes height, and must not trigger a font change + full redraw.
+  let fontKey='';
   function refitAllPanes(){
+    if(!screenPanes.size||!$('view-term').classList.contains('active'))return;
+    const key=window.innerWidth+'|'+screenPanes.size;
+    const fontChanged=key!==fontKey; fontKey=key;
     const fs=screenTermFontSize(screenPanes.size);
     screenPanes.forEach((p,k)=>{
       try{
-        if(p.term.options.fontSize!==fs)p.term.options.fontSize=fs;
+        if(fontChanged&&p.term.options.fontSize!==fs)p.term.options.fontSize=fs;
         p.fit.fit();
-        if(socket)socket.emit('screen:resize',{serverId:p.serverId,sessionName:k,cols:p.term.cols,rows:p.term.rows});
+        syncPtySize(p,k);
       }catch(_){}
     });
     updateTermBar();
   }
 
-  function handleScreenResize(){ applyViewportHeight(); if(screenPanes.size)refitAllPanes(); }
+  // Viewport events arrive in bursts (keyboard animation, rotation); one
+  // refit after they settle means one redraw for the program inside.
+  let refitTimer=null;
+  function scheduleRefit(delay){ clearTimeout(refitTimer); refitTimer=setTimeout(refitAllPanes,delay==null?150:delay); }
+  function handleScreenResize(){ applyViewportHeight(); if(screenPanes.size)scheduleRefit(150); }
   window.addEventListener('resize',handleScreenResize);
   window.addEventListener('orientationchange',handleScreenResize);
   if(window.visualViewport){
@@ -2870,6 +3014,8 @@
     if(!k)return;
     if(k.getAttribute('data-action')==='paste'){ screenPaste(); return; }
     if(k.getAttribute('data-action')==='type'){ termSend(false); return; }
+    if(k.getAttribute('data-action')==='copy'){ copyFromTerm(); return; }
+    if(k.getAttribute('data-action')==='hist'){ openHistory(); return; }
     const key=k.getAttribute('data-seq');
     const seq=SCREEN_KEY_MAP[key];
     if(!seq)return;
@@ -3322,6 +3468,143 @@
     const idx={indigo:0,green:1,blue:2,amber:3,purple:4}[name];
     if(dots[idx])dots[idx].classList.add('active');
     haptic('light'); showToast(name+' theme');
+  }
+
+  // ── Copy from the terminal ──────────────────────────
+  // xterm's canvas never gets a native selection on touch, so "copy" takes
+  // the selection when there is one and the visible screen otherwise; the
+  // history sheet covers anything finer.
+  function bufferText(term,from,to){
+    const b=term.buffer.active, out=[];
+    for(let i=from;i<to;i++){ const l=b.getLine(i); out.push(l?l.translateToString(true):''); }
+    return out.join('\n').replace(/\s+$/,'');
+  }
+  function termVisibleText(term){ const b=term.buffer.active; return bufferText(term,b.viewportY,b.viewportY+term.rows); }
+  function termAllText(term){ return bufferText(term,0,term.buffer.active.length); }
+
+  async function copyText(text,label){
+    try{
+      if(window.isSecureContext&&navigator.clipboard&&navigator.clipboard.writeText){
+        await navigator.clipboard.writeText(text); showToast('copied '+label); haptic('light'); return true;
+      }
+    }catch(_){}
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=text; ta.setAttribute('readonly',''); ta.style.cssText='position:fixed;top:0;left:0;width:2px;height:2px;opacity:0;';
+      document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0,text.length);
+      const ok=document.execCommand('copy'); ta.remove();
+      if(ok){ showToast('copied '+label); haptic('light'); return true; }
+    }catch(_){}
+    showToast('clipboard blocked here — open hist and select the text');
+    return false;
+  }
+
+  async function copyFromTerm(){
+    const p=screenPanes.get(focusedScreen);
+    if(!p){ showToast('no session'); return; }
+    let text=p.term.hasSelection&&p.term.hasSelection()?p.term.getSelection():'';
+    let label='selection';
+    if(!text||!text.trim()){ text=termVisibleText(p.term); label='screen · long-press text to select part'; }
+    if(!text.trim()){ showToast('nothing to copy'); return; }
+    await copyText(text,label);
+  }
+
+  // ── History sheet ───────────────────────────────────
+  // screen's own scrollback (hardcopy -h) as plain text: native scrolling,
+  // native selection, wrap toggle — and it covers what happened while this
+  // page was gone. Shows the local buffer instantly, then the full dump.
+  let histFor=null;
+  let histWrapOn=localStorage.getItem('termi_histwrap')!=='0';
+  function scrollHistToBottom(){ const b=$('histBody'); requestAnimationFrame(()=>{ b.scrollTop=b.scrollHeight; }); }
+  function openHistory(){
+    const p=screenPanes.get(focusedScreen);
+    if(!p){ showToast('no session'); return; }
+    haptic('light'); histFor=focusedScreen;
+    $('histTitle').textContent='history · '+p.name;
+    $('histText').classList.toggle('wrap',histWrapOn); $('histWrapBtn').classList.toggle('on',histWrapOn);
+    $('histText').textContent=termAllText(p.term)||'';
+    $('histNote').textContent=(socket&&connected)?'loading full history from screen…':'offline — showing what this page has seen';
+    $('histWrap').hidden=false;
+    scrollHistToBottom();
+    if(socket&&connected)socket.emit('screen:history',{serverId:p.serverId,sessionName:focusedScreen});
+  }
+  function closeHistory(){ $('histWrap').hidden=true; histFor=null; }
+  $('histCloseBtn').addEventListener('click',closeHistory);
+  $('histWrap').addEventListener('click',e=>{ if(e.target===$('histWrap'))closeHistory(); });
+  $('histWrapBtn').addEventListener('click',()=>{
+    histWrapOn=!histWrapOn; localStorage.setItem('termi_histwrap',histWrapOn?'1':'0');
+    $('histText').classList.toggle('wrap',histWrapOn); $('histWrapBtn').classList.toggle('on',histWrapOn); haptic('light');
+  });
+  $('histCopyBtn').addEventListener('click',()=>{ const t=$('histText').textContent; if(t)copyText(t,'history'); });
+
+  // ── Notifications ───────────────────────────────────
+  // The bell watches the focused session: the hub keeps its own display on
+  // it and pushes when output goes quiet — Claude finished, or is waiting.
+  let watches=[], pushKey=null;
+  function focusedPid(){ return focusedScreen?focusedScreen.split('.')[0]:null; }
+  function isWatched(){
+    const p=screenPanes.get(focusedScreen); if(!p)return false;
+    const pid=focusedPid();
+    return watches.some(w=>w.serverId===p.serverId&&String(w.pid)===pid);
+  }
+  function updateWatchBtn(){
+    const b=$('watchBtn'); if(!b)return;
+    const p=screenPanes.get(focusedScreen);
+    b.hidden=!p;
+    const on=isWatched();
+    b.classList.toggle('on',on);
+    b.setAttribute('aria-label',on?'Notifications on for this session — tap to turn off':'Notify me when this session goes quiet (Claude done or waiting)');
+  }
+  async function toggleWatch(){
+    const p=screenPanes.get(focusedScreen);
+    if(!p||!socket||!connected){ showToast('no session'); return; }
+    const on=!isWatched(); haptic('light');
+    if(on)await ensurePush();
+    socket.emit('watch:set',{serverId:p.serverId,pid:focusedPid(),name:p.name,on});
+    showToast(on?'will notify when '+p.name+' goes quiet':'notifications off for '+p.name);
+  }
+  function b64ToU8(b64){
+    const pad='='.repeat((4-b64.length%4)%4);
+    const raw=atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/'));
+    return Uint8Array.from(raw,c=>c.charCodeAt(0));
+  }
+  function u8ToB64(buf){
+    return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  // Push needs: permission, a service worker, https (or localhost), and on
+  // iOS the app installed to the home screen. Anything missing falls back to
+  // in-app alerts (toast + beep) while the page is open.
+  async function ensurePush(){
+    if(!('Notification' in window)){ showToast('no notification support here — in-app alerts only'); return false; }
+    let perm=Notification.permission;
+    if(perm==='default'){ try{ perm=await Notification.requestPermission(); }catch(_){ perm='denied'; } }
+    if(perm!=='granted'){ showToast('notifications blocked — in-app alerts only'); return false; }
+    try{
+      if(!navigator.serviceWorker){ showToast('push needs https — in-app alerts only'); return false; }
+      const reg=await navigator.serviceWorker.ready;
+      if(!reg.pushManager){ showToast(isIOS?'add termi to your home screen to get push':'push unsupported — in-app alerts only'); return false; }
+      if(!pushKey){
+        const r=await new Promise(res=>{ let done=false; socket.emit('push:key',null,x=>{done=true;res(x);}); setTimeout(()=>{ if(!done)res(null); },4000); });
+        pushKey=r&&r.key;
+        if(!pushKey){ showToast(r&&r.available===false?'hub has no web-push module — in-app alerts only':'could not get push key'); return false; }
+      }
+      let sub=await reg.pushManager.getSubscription();
+      // A subscription made under an older hub key can't be used — redo it.
+      if(sub&&sub.options&&sub.options.applicationServerKey&&u8ToB64(sub.options.applicationServerKey)!==pushKey){ await sub.unsubscribe(); sub=null; }
+      if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(pushKey)});
+      socket.emit('push:subscribe',{subscription:sub.toJSON(),ua:navigator.userAgent.slice(0,80)});
+      return true;
+    }catch(err){ showToast('push setup failed: '+err.message); return false; }
+  }
+  function sendVisibility(){ if(socket&&connected)socket.emit('client:visible',{visible:document.visibilityState==='visible'}); }
+  document.addEventListener('visibilitychange',sendVisibility);
+  // A tapped notification asks the page to open its session (no reload).
+  if(navigator.serviceWorker){
+    navigator.serviceWorker.addEventListener('message',e=>{
+      const d=e.data||{};
+      if(d.type==='open'&&typeof d.url==='string'){ try{ const u=new URL(d.url,location.href); if(u.hash)location.hash=u.hash; }catch(_){} }
+    });
   }
 
   // Notification sound (short beep using Web Audio API)
