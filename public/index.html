@@ -2137,9 +2137,11 @@
   }
 
   // "+ new screen" — name it and it appears on this server.
+  // New sessions are created on tmux automatically (truecolor); boxes without
+  // tmux fall back to screen server-side. Existing screen sessions keep working.
   function createScreenPrompt(){
     if(!socket||!connected){showToast('not connected');return;}
-    const name=prompt('Name for the new screen session:');
+    const name=prompt('Name for the new session:');
     if(name===null)return;
     const clean=name.trim().replace(/[^\w.\-]+/g,'-')||'terminal';
     socket.emit('screen:create',{serverId:route.server||curServer,name:clean});
