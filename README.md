@@ -1,6 +1,6 @@
 # termi
 
-**Your whole server fleet — from any browser.** termi is a mobile-first dashboard that lets you manage many servers over SSH from one UI: watch and drive their `screen` sessions in a real terminal, chat with a coding agent (Cursor / Claude Code) on each box, and keep an eye on load, disk, and uptime across the fleet. Runs as a PWA, so you can install it to your phone's home screen.
+**Your whole server fleet — from any browser.** termi is a mobile-first dashboard that lets you manage many servers over SSH from one UI: watch and drive their `screen` sessions in a real terminal, chat with a coding agent (Cursor / Claude Code / opencode) on each box, and keep an eye on load, disk, and uptime across the fleet. Runs as a PWA, so you can install it to your phone's home screen.
 
 ![node](https://img.shields.io/badge/node-20+-6e72f0?style=flat-square&labelColor=0a0a0c)
 ![license](https://img.shields.io/badge/license-MIT-6e72f0?style=flat-square&labelColor=0a0a0c)
@@ -10,10 +10,13 @@
 ## What it does
 
 - **Fleet dashboard** — every server you manage on one screen, each with a live status dot, running-session chips, and CPU/memory context. Search across the fleet; tap a card to jump in.
-- **Real terminals over SSH** — attach to any `screen` session on any server from the browser. Full xterm terminal with a mobile key bar (arrows, tab, ^C, esc, scrollback), split panes, and a full-screen mode. Create and rename sessions from the UI.
-- **Agent chat per server** — talk to Cursor Agent CLI or Claude Code running *on that box*, with conversation context kept separately per server.
+- **Real terminals over SSH** — attach to any `screen` **or `tmux`** session on any server from the browser. Full xterm terminal with a mobile key bar (arrows, tab, ^C, esc, scrollback), split panes, and a full-screen mode. Create and rename sessions from the UI.
+- **screen *and* tmux, chosen per session** — termi detects which multiplexer owns a session and drives each one natively, so your existing `screen` sessions keep working untouched. **New** sessions default to `tmux`, which carries 24-bit truecolor through intact — colored CLIs and agents look right instead of washed out (GNU screen 4.x downconverts truecolor to a dim 16-color approximation). Falls back to `screen` on boxes without tmux. termi's tmux runs on its own private socket (`tmux -L termi`), so it never touches a tmux server you run yourself.
+- **Agent chat per server** — talk to Cursor Agent CLI, Claude Code, or opencode running *on that box*, with conversation context kept separately per server.
+- **Full-screen apps** — opencode, vim, htop and friends fit your display. The `screen` window is sized to *your* terminal even when a laptop or termi's own notification watcher is attached to the same session; plain `screen -A` gives up as soon as a window has two displays, so termi sets the window size explicitly.
+- **Direct terminal (full-screen fidelity)** — the **⚡ opencode** button runs a full-screen TUI (opencode, vim, htop…) with the *alternate screen* and mouse passed through, exactly like a local terminal, in its own persistent `tmux` session. A normal attach (either backend) deliberately strips the alternate screen so xterm.js keeps mobile-friendly scrollback, so this button is the way to use apps that take over the whole screen. Extra apps go in `TERMI_DIRECT_APPS`. (Truecolor itself no longer needs this button — any `tmux`-backed session renders 24-bit color in the normal terminal view too.)
 - **Analytics & uptime** — a dedicated page with CPU load, memory, disk, and system uptime per server, continuous uptime-% tracking, and a downtime incident timeline.
-- **One hub, many boxes** — termi runs on a single "hub" server and connects out to the rest over SSH. Target servers need nothing installed beyond `sshd` + `screen` (which they already have).
+- **One hub, many boxes** — termi runs on a single "hub" server and connects out to the rest over SSH. Target servers need nothing installed beyond `sshd` + `screen` or `tmux` (at least one, usually already present).
 - **Secure by design** — SSH keys and passwords are encrypted at rest (AES-256-GCM); host keys are pinned on first connect (TOFU). Put it behind Cloudflare Access for email/Google-gated HTTPS.
 - **Automation-friendly** — every view has its own URL and all controls are real labelled links/buttons/inputs, so browser agents and assistive tech can drive it reliably.
 
@@ -41,8 +44,8 @@ Because the hub holds credentials to your whole fleet, **run it behind Cloudflar
 
 - A Linux server to act as the hub (any small VPS — Hetzner, DigitalOcean, etc.)
 - Node.js 20+ (the deploy script installs it if missing)
-- `screen` on every box you want to manage (already present on most)
-- Optional: Cursor Agent CLI and/or Claude Code on any box where you want the **chat** tab
+- `screen` and/or `tmux` on every box you want to manage (at least one; both usually present). New sessions prefer `tmux` for truecolor.
+- Optional: Cursor Agent CLI, Claude Code, and/or opencode on any box where you want the **chat** tab
 
 ---
 
@@ -123,6 +126,8 @@ Environment variables (written to the install dir's `.env` by `deploy.sh`):
 | `DATA_DIR` | `./data` | Where the encrypted registry, uptime history, push subscriptions and watch list are stored |
 | `NOTIFY_IDLE_MS` | `5000` | Quiet time after activity before a watched session notifies |
 | `SCREEN_SCROLLBACK` | `10000` | Scrollback lines termi asks screen to keep per session |
+| `OPENCODE_ARGS` | *(empty)* | Extra flags for `opencode run` in the chat tab, e.g. `--model anthropic/claude-sonnet-4-5` |
+| `TERMI_DIRECT_APPS` | `opencode` | Extra apps (comma-separated) the direct-terminal launcher may run, e.g. `lazygit,btop` |
 | `PUSH_SUBJECT` | `mailto:termi@localhost` | VAPID contact for Web Push (keys are generated into `DATA_DIR/vapid.json`) |
 | `CLAUDE_USER` | `termi` | Non-root user to run Claude Code as (when hub runs as root) |
 

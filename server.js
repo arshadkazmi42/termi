@@ -12,6 +12,8 @@ const remote = require('./lib/remote');
 const monitor = require('./lib/monitor');
 const notify = require('./lib/notify');
 const { altScreenFilter, cleanHardcopy } = require('./lib/termfilter');
+const { SAFE_SESSION } = require('./lib/screenctl');
+const muxer = require('./lib/muxer');
 
 const execAsync = util.promisify(exec);
 
@@ -23,6 +25,7 @@ const EXTRA_PATHS = [
   '/usr/bin',
   `${os.homedir()}/.local/bin`,
   `${os.homedir()}/.cursor/bin`,
+  `${os.homedir()}/.opencode/bin`,  // opencode's installer puts the binary here
 ].join(':');
 
 const AGENT_ENV = {
@@ -267,6 +270,20 @@ function runAgent(st, message, onChunk) {
   return spawnRunner(message, onChunk, 'agent', args);
 }
 
+// `opencode run` is opencode's non-interactive mode: the prompt is a
+// positional argument, `--continue` resumes the last session. Extra flags
+// (e.g. `--model provider/model`) via OPENCODE_ARGS.
+const OPENCODE_ARGS = (process.env.OPENCODE_ARGS || '').split(/\s+/).filter(Boolean);
+function opencodeArgs(st) {
+  return ['run', ...OPENCODE_ARGS, ...(st.hasSession ? ['--continue'] : [])];
+}
+function runOpencode(st, message, onChunk) {
+  return spawnRunner(message, onChunk, 'opencode', [...opencodeArgs(st), message]);
+}
+
+const AGENT_LABELS = { agent: 'Cursor Agent', claude: 'Claude Code', opencode: 'opencode' };
+const AGENT_TYPES = Object.keys(AGENT_LABELS);
+
 function getClaudeUid() {
   try {
     const uid = parseInt(require('child_process').execSync(`id -u ${CLAUDE_USER}`).toString().trim(), 10);
@@ -332,15 +349,21 @@ function runRemoteAgent(serverId, st, message, onChunk) {
   const b64 = Buffer.from(message, 'utf8').toString('base64');
   const cont = st.hasSession ? ' --continue' : '';
   const cmd = st.agentType === 'claude'
-    ? `echo ${b64} | base64 -d | claude --print --dangerously-skip-permissions${cont}`
-    : `echo ${b64} | base64 -d | agent --print --trust --yolo${cont}`;
+    ? `${remote.AGENT_PATH}; echo ${b64} | base64 -d | claude --print --dangerously-skip-permissions${cont}`
+    : st.agentType === 'opencode'
+      // opencode takes the prompt as an argument, not on stdin; "$(...)"
+      // keeps the decoded text as one argument with no shell quoting of it.
+      ? `${remote.AGENT_PATH} opencode ${opencodeArgs(st).join(' ')} "$(echo ${b64} | base64 -d)"`
+      : `${remote.AGENT_PATH}; echo ${b64} | base64 -d | agent --print --trust --yolo${cont}`;
   return remote.streamOnServer(serverId, cmd, onChunk);
 }
 
 function runActive(serverId, message, onChunk) {
   const st = chatState(serverId);
   if (serverId !== LOCAL_ID) return runRemoteAgent(serverId, st, message, onChunk);
-  return st.agentType === 'claude' ? runClaudeCode(st, message, onChunk) : runAgent(st, message, onChunk);
+  if (st.agentType === 'claude') return runClaudeCode(st, message, onChunk);
+  if (st.agentType === 'opencode') return runOpencode(st, message, onChunk);
+  return runAgent(st, message, onChunk);
 }
 
 async function runCommand(command) {
@@ -360,22 +383,50 @@ async function runCommand(command) {
 // Local sessions attach via node-pty; remote ones via an SSH PTY channel.
 // Both are wrapped in the same handle shape (write/resize/kill/onData/onExit).
 const pty = require('node-pty');
-const screenPtys = new Map(); // key: `${socketId}:${serverId}:${sessionName}` → { handle, sessionName }
+const screenPtys = new Map(); // key: `${socketId}:${serverId}:${sessionName}` → { handle, sessionName, … }
+const joinSeq = new Map();    // same key → latest join's sequence number; attach has two awaits a newer join can overtake
 
-const SAFE_SESSION = /^[\w.\-]+$/;
+// Which backend owns a given (serverId, fullName). Populated from every list;
+// attach/input/history/rename/resize resolve the backend from it, falling
+// back to a shape-based guess (see muxer.guess) when the cache is cold.
+const backendOf = new Map(); // serverId → Map(fullName → 'screen'|'tmux')
+function rememberBackends(serverId, sessions) {
+  let m = backendOf.get(serverId);
+  if (!m) { m = new Map(); backendOf.set(serverId, m); }
+  for (const s of sessions) m.set(s.fullName, s.backend);
+}
+function backendFor(serverId, fullName) {
+  const m = backendOf.get(serverId);
+  return muxer.byName(m && m.get(fullName)) || muxer.guess(fullName);
+}
+// tmux app sessions created by the ⚡ direct terminal live on the same socket;
+// keep them out of the normal session list.
+function isDirectAppSession(name) {
+  return Object.keys(DIRECT_APPS).some((a) => name === `termi-${a}`);
+}
 
+async function runList(serverId, cmd, timeout) {
+  if (serverId === LOCAL_ID) return (await execAsync(cmd, { timeout })).stdout;
+  return (await remote.execOnServer(serverId, cmd, { timeout })).stdout;
+}
+
+// List sessions from BOTH backends and merge. screen sessions are detected and
+// driven exactly as before; tmux sessions (new, truecolor) sit alongside them.
 async function listScreenSessions(serverId = LOCAL_ID) {
+  const sessions = [];
+  const localTimeout = 5000, remoteTimeout = 10000;
+  const t = serverId === LOCAL_ID ? localTimeout : remoteTimeout;
   try {
-    if (serverId === LOCAL_ID) {
-      const { stdout } = await execAsync('screen -ls', { timeout: 5000 });
-      return annotateSessions(serverId, parseScreenLs(stdout));
-    }
-    const { stdout } = await remote.execOnServer(serverId, 'screen -ls', { timeout: 10000 });
-    return annotateSessions(serverId, parseScreenLs(stdout));
+    sessions.push(...muxer.screen.parseList(await runList(serverId, muxer.screen.listCmd, t)));
   } catch (err) {
-    if (err.stdout) return annotateSessions(serverId, parseScreenLs(err.stdout));
-    return [];
+    if (err && err.stdout) sessions.push(...muxer.screen.parseList(err.stdout));
   }
+  try {
+    const tmuxSessions = muxer.tmux.parseList(await runList(serverId, muxer.tmux.listCmd, t));
+    sessions.push(...tmuxSessions.filter((s) => !isDirectAppSession(s.name)));
+  } catch (_) { /* tmux absent or no server running → no tmux sessions */ }
+  rememberBackends(serverId, sessions);
+  return annotateSessions(serverId, sessions);
 }
 
 // A watched session always has the hub's own watcher display attached, so
@@ -416,13 +467,16 @@ function parseScreenLs(output) {
   return sessions;
 }
 
-function spawnLocalScreen(args, cols, rows) {
-  const term = pty.spawn('screen', args, {
+// Spawn a local pty from a backend spawn spec ({bin, args}). The backend's
+// extraEnv carries anything the attach needs (tmux wants TERM/COLORTERM so it
+// advertises truecolor to the program inside).
+function spawnLocalMux(spec, cols, rows, backend) {
+  const term = pty.spawn(spec.bin, spec.args, {
     name: 'xterm-256color',
     cols: cols || 80,
     rows: rows || 24,
     cwd: process.env.HOME,
-    env: process.env,
+    env: { ...process.env, ...((backend && backend.extraEnv) || {}) },
   });
   return {
     write: (d) => term.write(d),
@@ -433,13 +487,15 @@ function spawnLocalScreen(args, cols, rows) {
   };
 }
 
-// Browser attaches use `screen -A -x`: -A adapts the shared window to THIS
-// display's size. Without it screen keeps whatever size the last display
-// had (a 200-col laptop), and a phone sees every line clipped.
-const ATTACH_ARGS = (sessionName) => ['-A', '-x', sessionName];
-
-function openLocalPty(sessionName, cols, rows) {
-  return spawnLocalScreen(ATTACH_ARGS(sessionName), cols, rows);
+// A browser attach. screen uses `screen -A -x` (-A adapts the shared window to
+// THIS display); tmux runs its attach script (truecolor + `window-size latest`,
+// which follows the attached pty). Remote attaches run the same command over SSH.
+function openLocalPty(backend, fullName, cols, rows) {
+  return spawnLocalMux(backend.attachSpawn(fullName), cols, rows, backend);
+}
+function attachRemoteCmd(backend, fullName) {
+  const cmd = backend.attachRemoteCmd(fullName);
+  return backend.needsAgentPath ? `${remote.AGENT_PATH}; ${cmd}` : cmd;
 }
 
 // Run the client-bound byte stream through the alt-screen filter so
@@ -452,19 +508,23 @@ function filterHandle(handle) {
   };
 }
 
+// Run a screen command inside a session from outside (`screen -S x -X …`).
+function screenCmd(serverId, cmd) {
+  return serverId === LOCAL_ID
+    ? execAsync(cmd, { timeout: 5000 })
+    : remote.execOnServer(serverId, cmd, { timeout: 10000 });
+}
+
 // screen's default history is 100 lines — useless for reading what an
 // agent did while you were away. Raise it once per session (per hub run).
 const SCROLLBACK_LINES = parseInt(process.env.SCREEN_SCROLLBACK || '10000', 10);
 const scrollbackBumped = new Set();
 function bumpScrollback(serverId, sessionName) {
-  const key = `${serverId}:${sessionName.split('.')[0]}`;
+  const backend = backendFor(serverId, sessionName);
+  const key = `${serverId}:${backend.name}:${sessionName.split('.')[0]}`;
   if (scrollbackBumped.has(key)) return;
   scrollbackBumped.add(key);
-  const cmd = `screen -S ${sessionName} -X scrollback ${SCROLLBACK_LINES}`;
-  const run = serverId === LOCAL_ID
-    ? execAsync(cmd, { timeout: 5000 })
-    : remote.execOnServer(serverId, cmd, { timeout: 10000 });
-  run.catch((err) => { scrollbackBumped.delete(key); console.log('[screen] scrollback bump failed:', serverId, sessionName, err.message); });
+  screenCmd(serverId, backend.scrollbackCmd(sessionName, SCROLLBACK_LINES)).catch((err) => { scrollbackBumped.delete(key); console.log('[screen] scrollback bump failed:', serverId, sessionName, err.message); });
 }
 
 // The window's scrollback + screen as plain text (`hardcopy -h`), for the
@@ -472,9 +532,25 @@ function bumpScrollback(serverId, sessionName) {
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 async function screenHistory(serverId, sessionName) {
   if (!SAFE_SESSION.test(sessionName)) throw new Error('Invalid session name');
+  const backend = backendFor(serverId, sessionName);
+
+  // tmux prints the scrollback straight to stdout (`capture-pane -p`) — no
+  // tmp file, no settle delay.
+  if (backend.historyMode === 'stdout') {
+    const cmd = backend.historyCmd(sessionName, { lines: SCROLLBACK_LINES });
+    if (serverId === LOCAL_ID) {
+      const { stdout } = await execAsync(cmd, { timeout: 8000 });
+      return cleanHardcopy(stdout);
+    }
+    const { stdout, stderr, code } = await remote.execOnServer(serverId, cmd, { timeout: 20000 });
+    if (code !== 0 && !stdout) throw new Error((stderr || 'capture-pane failed').trim().split('\n')[0]);
+    return cleanHardcopy(stdout);
+  }
+
+  // screen writes the window + scrollback to a file (`hardcopy -h`).
   const tmp = `/tmp/termi-hc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   if (serverId === LOCAL_ID) {
-    await execAsync(`screen -S ${sessionName} -X hardcopy -h ${tmp}`, { timeout: 5000 });
+    await execAsync(backend.historyCmd(sessionName, { tmp }), { timeout: 5000 });
     // hardcopy is written by the session process right after the message
     // lands; give it a moment (and one more on a slow box).
     let text = null;
@@ -487,7 +563,7 @@ async function screenHistory(serverId, sessionName) {
     return cleanHardcopy(text);
   }
   const { stdout, stderr, code } = await remote.execOnServer(serverId,
-    `screen -S ${sessionName} -X hardcopy -h ${tmp} && sleep 0.4 && cat ${tmp}; s=$?; rm -f ${tmp}; exit $s`, { timeout: 20000 });
+    `${backend.historyCmd(sessionName, { tmp })} && sleep 0.4 && cat ${tmp}; s=$?; rm -f ${tmp}; exit $s`, { timeout: 20000 });
   if (code !== 0 && !stdout) throw new Error((stderr || 'hardcopy failed').trim().split('\n')[0]);
   return cleanHardcopy(stdout);
 }
@@ -500,18 +576,32 @@ async function attachScreen(socket, serverId, sessionName, cols, rows) {
   const key = `${socket.id}:${serverId}:${sessionName}`;
   detachScreen(socket, serverId, sessionName);
 
-  console.log('[screen] attaching:', serverId, sessionName, `${cols}x${rows}`);
+  const backend = backendFor(serverId, sessionName);
+  console.log('[screen] attaching:', serverId, sessionName, `${cols}x${rows}`, `(${backend.name})`);
+
+  // Size the window BEFORE the display attaches (see setWindowSize for why
+  // -A is not enough). Order matters: a `width` that lands while the
+  // display is still attaching leaves screen's picture of that display
+  // misaligned — the frame comes out scrolled up by a third of the screen
+  // until the next resize — whereas a display attaching to a window that
+  // already has its size gets a clean, correct redraw.
+  const seq = (joinSeq.get(key) || 0) + 1;
+  joinSeq.set(key, seq);
+  const sized = await applyWindowSize(serverId, sessionName, cols, rows);
+  if (joinSeq.get(key) !== seq) return;   // a newer join for this pane superseded us
+  detachScreen(socket, serverId, sessionName);   // …and whatever attached meanwhile
 
   let handle;
   try {
     handle = filterHandle(serverId === LOCAL_ID
-      ? openLocalPty(sessionName, cols, rows)
-      : await remote.openRemotePty(serverId, `screen ${ATTACH_ARGS(sessionName).join(' ')}`, { cols: cols || 80, rows: rows || 24 }));
+      ? openLocalPty(backend, sessionName, cols, rows)
+      : await remote.openRemotePty(serverId, attachRemoteCmd(backend, sessionName), { cols: cols || 80, rows: rows || 24 }));
   } catch (err) {
     console.log('[screen] attach failed:', serverId, sessionName, err.message);
     socket.emit('screen:exit', { serverId, sessionName, exitCode: -1, error: err.message });
     return;
   }
+  if (joinSeq.get(key) !== seq) { try { handle.kill(); } catch (_) {} return; }
 
   handle.onData((data) => {
     socket.emit('screen:output', { serverId, sessionName, data });
@@ -528,30 +618,77 @@ async function attachScreen(socket, serverId, sessionName, cols, rows) {
     socket.emit('screen:exit', { serverId, sessionName, exitCode });
   });
 
-  screenPtys.set(key, { handle, sessionName, serverId, socket });
+  const size = { cols, rows };
+  screenPtys.set(key, { handle, sessionName, serverId, socket, backend, wantSize: size, appliedSize: sized ? size : null, sizeTimer: null, sizing: false, sizeDirty: false, closed: false });
   bumpScrollback(serverId, sessionName);
+}
+
+// ── Window size ────────────────────────────────────────
+// `-A` only adapts the window while it is shown on a single display; with
+// the hub's notification watcher attached (see openWatchPty), a laptop, or
+// a previous termi attach still winding down, it silently does nothing and
+// the phone gets a 48-column slice of a 200-column window — a full-screen
+// app like opencode looks shredded. So the window size is also set
+// explicitly, with `width -w` (see lib/screenctl.js): right before the
+// display attaches (attachScreen) and after every client resize — there
+// the display's own pty is resized first, then the window is brought to
+// the same size, which screen redraws cleanly. Resizes are settled briefly:
+// a phone fires several per keyboard open/close, and on a remote box each
+// one is an SSH exec.
+const RESIZE_SETTLE_MS = 200;
+async function applyWindowSize(serverId, sessionName, cols, rows) {
+  const backend = backendFor(serverId, sessionName);
+  // tmux tracks the attached pty's size (`window-size latest`); resizing the
+  // display pty is enough, no external command needed.
+  if (!backend.externalSize) return true;
+  const cmd = backend.windowSizeCmd(sessionName, cols, rows);
+  if (!cmd) return false;
+  try { await screenCmd(serverId, cmd); return true; }
+  catch (err) { console.log('[screen] window size failed:', serverId, sessionName, err.message); return false; }
+}
+function setWindowSize(entry, cols, rows) {
+  entry.wantSize = { cols, rows };
+  if (entry.sizeTimer) return;
+  entry.sizeTimer = setTimeout(() => { entry.sizeTimer = null; flushWindowSize(entry); }, RESIZE_SETTLE_MS);
+}
+async function flushWindowSize(entry) {
+  if (entry.closed) return;
+  if (entry.sizing) { entry.sizeDirty = true; return; }
+  const want = entry.wantSize;
+  if (!want || (entry.appliedSize && entry.appliedSize.cols === want.cols && entry.appliedSize.rows === want.rows)) return;
+  entry.sizing = true;
+  if (await applyWindowSize(entry.serverId, entry.sessionName, want.cols, want.rows)) entry.appliedSize = want;
+  entry.sizing = false;
+  if (entry.sizeDirty) { entry.sizeDirty = false; flushWindowSize(entry); }
 }
 
 function detachScreen(socket, serverId, sessionName) {
   const key = `${socket.id}:${serverId}:${sessionName}`;
   const entry = screenPtys.get(key);
   if (entry) {
-    // Send detach key (Ctrl-A d) to cleanly leave without killing session
-    entry.handle.write('\x01d');
+    entry.closed = true; clearTimeout(entry.sizeTimer);
+    // Detach cleanly without killing the session. screen needs Ctrl-A d;
+    // tmux keeps the session in its daemon when the client pty is killed,
+    // so it has no detach key.
+    const keys = entry.backend && entry.backend.detachKeys;
+    if (keys) entry.handle.write(keys);
     setTimeout(() => {
       try { entry.handle.kill(); } catch (_) {}
-    }, 500);
+    }, keys ? 500 : 0);
     screenPtys.delete(key);
   }
 }
 
 function detachAllScreens(socketId) {
+  for (const key of joinSeq.keys()) if (key.startsWith(`${socketId}:`)) joinSeq.delete(key);
   for (const [key, entry] of screenPtys.entries()) {
     if (key.startsWith(`${socketId}:`)) {
-      entry.handle.write('\x01d');
+      entry.closed = true; clearTimeout(entry.sizeTimer);
+      const keys = entry.backend && entry.backend.detachKeys;
+      if (keys) entry.handle.write(keys);
       setTimeout(() => {
         try { entry.handle.kill(); } catch (_) {}
-      }, 500);
+      }, keys ? 500 : 0);
       screenPtys.delete(key);
     }
   }
@@ -568,22 +705,43 @@ function sendScreenInput(socket, serverId, sessionName, data) {
 
 function resizeScreenPty(socket, serverId, sessionName, cols, rows) {
   const entry = screenPtys.get(`${socket.id}:${serverId}:${sessionName}`);
-  if (entry) entry.handle.resize(cols, rows);
+  if (!entry) return;
+  entry.handle.resize(cols, rows);
+  setWindowSize(entry, cols, rows);
 }
 
 // ── Session watchers → notifications ──────────────────
 // A watched session keeps a hub-side display attached (`screen -x <pid>`,
-// never resized, never -A so it can't fight the user's window size). Its
+// never resized, never -A; the user's own attach sets the window size
+// explicitly, see setWindowSize, so this display can't fight it). Its
 // output drives an IdleDetector; when a run goes quiet the user gets a push.
 const watchers = new Map(); // watchKey → { entry, handle, detector, retry, fails, stopped, lastNotified }
 const WATCH_COLS = 200, WATCH_ROWS = 50;
 const NOTIFY_IDLE_MS = parseInt(process.env.NOTIFY_IDLE_MS || '5000', 10);
 const NOTIFY_COOLDOWN_MS = 10000;
 
-function openWatchPty(serverId, pid) {
-  return serverId === LOCAL_ID
-    ? Promise.resolve(spawnLocalScreen(['-x', String(pid)], WATCH_COLS, WATCH_ROWS))
-    : remote.openRemotePty(serverId, `screen -x ${pid}`, { cols: WATCH_COLS, rows: WATCH_ROWS });
+// The backend of a watched session: taken from the persisted entry when
+// present (new watches store it), else inferred from the id/name shape so
+// pre-existing (screen) watches keep working after an upgrade.
+function watchBackend(entry) {
+  return muxer.byName(entry.backend) || muxer.guess(entry.fullName || entry.pid);
+}
+// The session's full name (for the notification deep-link): stored on new
+// watches; reconstructed as "<pid>.<name>" for older screen-only watches.
+function watchFullName(entry) {
+  return entry.fullName || `${entry.pid}.${entry.name}`;
+}
+
+function openWatchPty(entry) {
+  const backend = watchBackend(entry);
+  const id = entry.pid;
+  if (entry.serverId === LOCAL_ID) {
+    return Promise.resolve(spawnLocalMux(backend.watchSpawn(id), WATCH_COLS, WATCH_ROWS, backend));
+  }
+  const cmd = backend.needsAgentPath
+    ? `${remote.AGENT_PATH}; ${backend.watchRemoteCmd(id)}`
+    : backend.watchRemoteCmd(id);
+  return remote.openRemotePty(entry.serverId, cmd, { cols: WATCH_COLS, rows: WATCH_ROWS });
 }
 
 async function startWatcher(entry) {
@@ -593,7 +751,7 @@ async function startWatcher(entry) {
   if (!w) { w = { entry, handle: null, detector: null, retry: null, fails: 0, stopped: false, lastNotified: 0 }; watchers.set(key, w); }
   w.entry = entry; w.starting = true;
   let handle;
-  try { handle = await openWatchPty(entry.serverId, entry.pid); }
+  try { handle = await openWatchPty(entry); }
   catch (err) { w.starting = false; scheduleWatchRetry(w, err); return; }
   w.starting = false;
   if (w.stopped) { try { handle.kill(); } catch (_) {} return; }
@@ -609,7 +767,7 @@ async function startWatcher(entry) {
     // Kicked off (someone ran `screen -d`) or the session died. Reattach if
     // it still exists, otherwise forget it.
     let alive = false;
-    try { alive = (await listScreenSessions(entry.serverId)).some(s => s.pid === String(entry.pid)); } catch (_) {}
+    try { alive = (await listScreenSessions(entry.serverId)).some(s => String(s.id) === String(entry.pid)); } catch (_) {}
     if (alive) scheduleWatchRetry(w, null);
     else { console.log('[watch] session gone:', key); setWatch(entry.serverId, entry.pid, entry.name, false); }
   });
@@ -634,19 +792,43 @@ function stopWatcher(key) {
   clearTimeout(w.retry);
   if (w.detector) w.detector.dispose();
   const h = w.handle; w.handle = null;
-  if (h) { try { h.write('\x01d'); } catch (_) {} setTimeout(() => { try { h.kill(); } catch (_) {} }, 500); }
+  if (h) {
+    const keys = watchBackend(w.entry).detachKeys;
+    if (keys) { try { h.write(keys); } catch (_) {} }
+    setTimeout(() => { try { h.kill(); } catch (_) {} }, keys ? 500 : 0);
+  }
   watchers.delete(key);
 }
 
-function setWatch(serverId, pid, name, on) {
+function setWatch(serverId, pid, name, on, extra = {}) {
   pid = String(pid);
   if (on) {
     const entry = { serverId, pid, name: String(name || pid) };
+    if (extra.fullName) entry.fullName = String(extra.fullName);
+    if (extra.backend) entry.backend = String(extra.backend);
     notify.addWatch(entry);
     startWatcher(entry);
   } else {
     notify.removeWatch(serverId, pid);
     stopWatcher(notify.watchKey(serverId, pid));
+  }
+  io.emit('watch:list', { watches: notify.listWatches() });
+}
+
+// tmux's session name IS its identity, so renaming a watched tmux session
+// moves its watch key. The live watcher handle stays attached (same session),
+// we just re-file it under the new id. (screen keeps its pid across rename, so
+// it needs none of this — see the rename handler.)
+function rekeyWatch(serverId, oldId, newId) {
+  const persisted = notify.listWatches().find(e => e.serverId === serverId && e.pid === oldId);
+  const w = watchers.get(notify.watchKey(serverId, oldId));
+  if (!persisted && !w) return;
+  notify.removeWatch(serverId, oldId);
+  notify.addWatch({ serverId, pid: newId, name: newId, fullName: newId, backend: 'tmux' });
+  if (w) {
+    watchers.delete(notify.watchKey(serverId, oldId));
+    w.entry = { serverId, pid: newId, name: newId, fullName: newId, backend: 'tmux' };
+    watchers.set(notify.watchKey(serverId, newId), w);
   }
   io.emit('watch:list', { watches: notify.listWatches() });
 }
@@ -668,7 +850,7 @@ async function onSessionIdle(w, info) {
   const now = Date.now();
   if (now - w.lastNotified < NOTIFY_COOLDOWN_MS) return;
   w.lastNotified = now;
-  const fullName = `${pid}.${name}`;
+  const fullName = watchFullName(w.entry);
   const payload = {
     title: `${name} · ${serverName(serverId)}`,
     body: (info.needsInput ? 'waiting for your input' : 'finished — waiting for you') + (info.snippet ? `\n${info.snippet}` : ''),
@@ -749,23 +931,31 @@ async function probeAndEmit(serverId, force) {
   let result;
   if (serverId === LOCAL_ID) {
     const sessions = await listScreenSessions(LOCAL_ID);
-    const [agentAvail, claudeAvail] = await Promise.all([
+    const [agentAvail, claudeAvail, opencodeAvail, tmuxAvail] = await Promise.all([
       execAsync('which agent', { env: AGENT_ENV }).then(() => true).catch(() => false),
       execAsync('which claude', { env: AGENT_ENV }).then(() => true).catch(() => false),
+      execAsync('which opencode', { env: AGENT_ENV }).then(() => true).catch(() => false),
+      execAsync('which tmux', { env: AGENT_ENV }).then(() => true).catch(() => false),
     ]);
     result = {
-      online: true, hasScreen: true, hasClaude: claudeAvail, hasAgent: agentAvail,
+      online: true, hasScreen: true, hasTmux: tmuxAvail, hasClaude: claudeAvail, hasAgent: agentAvail, hasOpencode: opencodeAvail,
       screens: sessions.length, attached: sessions.filter(s => s.status === 'attached').length,
       sessions: sessions.slice(0, 16),
     };
   } else {
     const probe = await remote.probeServer(serverId);
-    const sessions = probe.screenLs ? annotateSessions(serverId, parseScreenLs(probe.screenLs)) : [];
+    const sessions = annotateSessions(serverId, [
+      ...muxer.screen.parseList(probe.screenLs || ''),
+      ...muxer.tmux.parseList(probe.tmuxLs || '').filter(s => !isDirectAppSession(s.name)),
+    ]);
+    rememberBackends(serverId, sessions);
     result = {
       online: probe.online,
       hasScreen: !!probe.hasScreen,
+      hasTmux: !!probe.hasTmux,
       hasClaude: !!probe.hasClaude,
       hasAgent: !!probe.hasAgent,
+      hasOpencode: !!probe.hasOpencode,
       screens: sessions.length,
       attached: sessions.filter(s => s.status === 'attached').length,
       sessions: sessions.slice(0, 16),
@@ -794,6 +984,108 @@ io.use((socket, next) => {
   next();
 });
 
+// ── Direct terminal (tmux-backed) ──────────────────────
+// A faithful, full-fidelity terminal that is ALSO persistent. The app runs
+// inside a tmux session (one per app, `termi-<app>`); termi attaches to it
+// and streams the bytes straight to xterm.js. Unlike GNU screen 4.x — which
+// downconverts opencode's 24-bit color to a dim approximation, the reason it
+// looks washed out through a normal attach — tmux carries truecolor, the
+// alternate screen and mouse through intact. And because the session lives
+// in the tmux server (a daemon), it keeps running when the browser closes or
+// the socket drops: reopening the app re-attaches to the same live session,
+// exactly like the screen sessions termi is built around. tmux must be
+// installed on the target box (it usually is; the terminal says so if not).
+//
+// Only apps on this allowlist can be launched — the client sends an id, not
+// a command line, so nothing arbitrary is ever run. Add more with
+// TERMI_DIRECT_APPS=lazygit,btop (each taken as its own bare command).
+const DIRECT_APPS = { opencode: { bin: 'opencode', args: OPENCODE_ARGS } };
+for (const name of (process.env.TERMI_DIRECT_APPS || '').split(',').map(x => x.trim()).filter(Boolean)) {
+  if (/^[\w.-]+$/.test(name) && !DIRECT_APPS[name]) DIRECT_APPS[name] = { bin: name, args: [] };
+}
+const directPtys = new Map(); // `${socket.id}:${termId}` → handle
+
+// Dedicated tmux server socket, kept separate from any tmux the user runs.
+const TMUX = 'tmux -L termi';
+// Shell that creates the app's tmux session if absent, forces truecolor, and
+// attaches (exec, so a dropped connection cleanly detaches and the session
+// keeps running in the tmux daemon). Idempotent: a second call re-attaches.
+function tmuxAttachScript(app, appId, cols, rows) {
+  const session = `termi-${appId}`;
+  const inner = `COLORTERM=truecolor ${[app.bin, ...app.args].map(remote.shq).join(' ')}`;
+  const opts = `${TMUX} set -g default-terminal tmux-256color \\; set -ga terminal-overrides ',*:Tc' \\; `
+    + `set -g status off \\; set -g window-size latest \\; set -g escape-time 10 \\; set -g destroy-unattached off`;
+  return [
+    `command -v tmux >/dev/null 2>&1 || { printf '\\r\\n  tmux is not installed on this server.\\r\\n  The persistent terminal needs it (apt install tmux).\\r\\n'; sleep 3; exit 127; }`,
+    `${TMUX} new-session -d -s ${remote.shq(session)} -x ${cols || 80} -y ${rows || 24} ${remote.shq(inner)} 2>/dev/null`,
+    `${opts} >/dev/null 2>&1`,
+    `exec ${TMUX} attach -t ${remote.shq(session)}`,
+  ].join('; ');
+}
+
+function openDirectLocal(app, appId, cols, rows) {
+  const term = pty.spawn('bash', ['-lc', tmuxAttachScript(app, appId, cols, rows)], {
+    name: 'xterm-256color',
+    cols: cols || 80,
+    rows: rows || 24,
+    cwd: WORK_DIR,
+    env: { ...AGENT_ENV, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
+  });
+  return {
+    write: (d) => { try { term.write(d); } catch (_) {} },
+    resize: (c, r) => { try { term.resize(c, r); } catch (_) {} },
+    kill: () => { try { term.kill(); } catch (_) {} },
+    onData: (fn) => term.onData(fn),
+    onExit: (fn) => term.onExit(fn),
+  };
+}
+
+function openDirectRemote(serverId, app, appId, cols, rows) {
+  const cmd = `${remote.AGENT_PATH}; ${tmuxAttachScript(app, appId, cols, rows)}`;
+  return remote.openRemotePty(serverId, cmd, { cols: cols || 80, rows: rows || 24 });
+}
+
+async function openDirectTerm(socket, termId, serverId, appId, cols, rows) {
+  const app = DIRECT_APPS[appId];
+  const key = `${socket.id}:${termId}`;
+  if (!app) { socket.emit('term:exit', { termId, error: `Unknown app: ${appId}` }); return; }
+  if (directPtys.has(key)) closeDirectTerm(socket, termId);
+  console.log('[direct] open:', serverId, appId, `${cols}x${rows}`);
+  let handle;
+  try {
+    handle = serverId === LOCAL_ID
+      ? openDirectLocal(app, appId, cols, rows)
+      : await openDirectRemote(serverId, app, appId, cols, rows);
+  } catch (err) {
+    console.log('[direct] open failed:', serverId, appId, err.message);
+    socket.emit('term:exit', { termId, error: err.message });
+    return;
+  }
+  directPtys.set(key, handle);
+  handle.onData((d) => socket.emit('term:data', { termId, data: typeof d === 'string' ? d : d.toString('utf8') }));
+  handle.onExit((ev) => {
+    if (directPtys.get(key) !== handle) return;
+    directPtys.delete(key);
+    socket.emit('term:exit', { termId, exitCode: ev && ev.exitCode });
+  });
+}
+
+function closeDirectTerm(socket, termId) {
+  const key = `${socket.id}:${termId}`;
+  const handle = directPtys.get(key);
+  if (!handle) return;
+  directPtys.delete(key);
+  try { handle.kill(); } catch (_) {}
+}
+
+function closeAllDirect(socketId) {
+  for (const [key, handle] of directPtys.entries()) {
+    if (!key.startsWith(`${socketId}:`)) continue;
+    directPtys.delete(key);
+    try { handle.kill(); } catch (_) {}
+  }
+}
+
 io.on('connection', (socket) => {
   console.log('[socket] connected:', socket.id, 'transport:', socket.conn.transport.name);
   socket.data.visible = true;
@@ -807,26 +1099,27 @@ io.on('connection', (socket) => {
     const serverId = (payload && payload.serverId) || LOCAL_ID;
     const st = chatState(serverId);
 
-    let agentAvail = false, claudeAvail = false, online = true;
+    let agentAvail = false, claudeAvail = false, opencodeAvail = false, online = true;
     try {
       const probe = await probeAndEmit(serverId);
       agentAvail = !!probe.hasAgent;
       claudeAvail = !!probe.hasClaude;
+      opencodeAvail = !!probe.hasOpencode;
       online = !!probe.online;
     } catch (_) {}
+    const avail = { agent: agentAvail, claude: claudeAvail, opencode: opencodeAvail };
 
     if (!online) {
       socket.emit('status', { serverId, connected: false, message: 'Server unreachable over SSH.' });
       return;
     }
-    if (!agentAvail && !claudeAvail) {
-      socket.emit('status', { serverId, connected: true, agentType: st.agentType, agentAvail, claudeAvail, message: 'No agent CLI found on this server.' });
+    if (!agentAvail && !claudeAvail && !opencodeAvail) {
+      socket.emit('status', { serverId, connected: true, agentType: st.agentType, agentAvail, claudeAvail, opencodeAvail, message: 'No agent CLI found on this server.' });
       return;
     }
 
     // If current agentType isn't available, fall back to what is
-    if (st.agentType === 'agent' && !agentAvail && claudeAvail) st.agentType = 'claude';
-    if (st.agentType === 'claude' && !claudeAvail && agentAvail) st.agentType = 'agent';
+    if (!avail[st.agentType]) st.agentType = AGENT_TYPES.find(t => avail[t]);
 
     // If agent is currently running — send current output so mobile catches up
     if (st.agentRunning && st.pendingOutput) {
@@ -847,6 +1140,7 @@ io.on('connection', (socket) => {
       agentType: st.agentType,
       agentAvail,
       claudeAvail,
+      opencodeAvail,
       message: st.agentRunning
         ? 'Agent is busy — reconnected, catching up...'
         : st.hasSession
@@ -856,7 +1150,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('setAgent', ({ type, serverId = LOCAL_ID }) => {
-    if (!['agent', 'claude'].includes(type)) return;
+    if (!AGENT_TYPES.includes(type)) return;
     const st = chatState(serverId);
     if (st.agentRunning) {
       socket.emit('response', { serverId, type: 'error', content: 'Cannot switch agents while one is running.' });
@@ -867,7 +1161,7 @@ io.on('connection', (socket) => {
     st.lastResponse = null;
     st.pendingOutput = '';
     socket.emit('agentSwitched', { serverId, agentType: st.agentType });
-    socket.emit('response', { serverId, type: 'system', content: `Switched to ${type === 'claude' ? 'Claude Code' : 'Cursor Agent'} — session reset.` });
+    socket.emit('response', { serverId, type: 'system', content: `Switched to ${AGENT_LABELS[type]} — session reset.` });
   });
 
   socket.on('chat', ({ message, serverId = LOCAL_ID }) => {
@@ -926,16 +1220,21 @@ io.on('connection', (socket) => {
   // terminal when a server has none).
   socket.on('screen:create', async ({ serverId = LOCAL_ID, name }) => {
     const clean = String(name || 'terminal').replace(/[^\w.\-]/g, '-').slice(0, 40);
-    if (!SAFE_SESSION.test(clean)) return;
-    console.log('[screen] create:', serverId, clean);
+    if (!SAFE_SESSION.test(clean) || isDirectAppSession(clean)) return;
+    // New sessions default to tmux (truecolor); fall back to screen where tmux
+    // is absent. Probe is cached, so this is cheap.
+    const probe = (probeCache.get(serverId) || {}).result || await probeAndEmit(serverId);
+    const backend = muxer.pickCreateBackend(probe);
+    console.log('[screen] create:', serverId, clean, `(${backend.name})`);
     try {
-      if (serverId === LOCAL_ID) await execAsync(`screen -dmS ${clean}`, { timeout: 5000, cwd: WORK_DIR });
-      else await remote.execOnServer(serverId, `screen -dmS ${clean}`, { timeout: 12000 });
+      const cmd = backend.createCmd(clean, { scrollback: SCROLLBACK_LINES });
+      if (serverId === LOCAL_ID) await execAsync(cmd, { timeout: 8000, cwd: WORK_DIR });
+      else await remote.execOnServer(serverId, cmd, { timeout: 12000 });
       probeCache.delete(serverId);
       const sessions = await listScreenSessions(serverId);
       socket.emit('screen:list', { serverId, sessions });
     } catch (err) {
-      socket.emit('servers:error', { message: 'Could not create screen session: ' + err.message });
+      socket.emit('servers:error', { message: 'Could not create session: ' + err.message });
     }
   });
 
@@ -944,17 +1243,28 @@ io.on('connection', (socket) => {
   socket.on('screen:rename', async ({ serverId = LOCAL_ID, sessionName, newName }) => {
     const clean = String(newName || '').replace(/[^\w.\-]/g, '-').slice(0, 40);
     if (!SAFE_SESSION.test(sessionName) || !clean || !SAFE_SESSION.test(clean)) return;
-    console.log('[screen] rename:', serverId, sessionName, '→', clean);
+    if (isDirectAppSession(clean)) return;
+    const backend = backendFor(serverId, sessionName);
+    console.log('[screen] rename:', serverId, sessionName, '→', clean, `(${backend.name})`);
     try {
-      const cmd = `screen -S ${sessionName} -X sessionname ${clean}`;
+      const cmd = backend.renameCmd(sessionName, clean);
       if (serverId === LOCAL_ID) await execAsync(cmd, { timeout: 5000 });
       else await remote.execOnServer(serverId, cmd, { timeout: 12000 });
       probeCache.delete(serverId);
-      const pid = sessionName.split('.')[0];
-      notify.renameWatch(serverId, pid, clean);
-      const w = watchers.get(notify.watchKey(serverId, pid));
-      if (w) w.entry.name = clean;
-      io.emit('screen:renamed', { serverId, oldFullName: sessionName, newFullName: `${pid}.${clean}` });
+      let newFullName;
+      if (backend.name === 'screen') {
+        // The pid (identity) survives a screen rename; only the name changes.
+        const pid = sessionName.split('.')[0];
+        notify.renameWatch(serverId, pid, clean);
+        const w = watchers.get(notify.watchKey(serverId, pid));
+        if (w) w.entry.name = clean;
+        newFullName = `${pid}.${clean}`;
+      } else {
+        // tmux: the name is the identity, so the watch key moves with it.
+        rekeyWatch(serverId, sessionName, clean);
+        newFullName = clean;
+      }
+      io.emit('screen:renamed', { serverId, oldFullName: sessionName, newFullName });
       const sessions = await listScreenSessions(serverId);
       io.emit('screen:list', { serverId, sessions });
     } catch (err) {
@@ -971,6 +1281,20 @@ io.on('connection', (socket) => {
     console.log('[screen] leave:', serverId, sessionName);
     detachScreen(socket, serverId, sessionName);
   });
+
+  // ── Direct terminal events (see openDirectTerm) ──────
+  socket.on('term:open', ({ termId, serverId = LOCAL_ID, app, cols, rows }) => {
+    openDirectTerm(socket, String(termId || '1'), serverId, String(app || ''), cols, rows);
+  });
+  socket.on('term:input', ({ termId, data }) => {
+    const h = directPtys.get(`${socket.id}:${termId}`);
+    if (h && typeof data === 'string') h.write(data);
+  });
+  socket.on('term:resize', ({ termId, cols, rows }) => {
+    const h = directPtys.get(`${socket.id}:${termId}`);
+    if (h) h.resize(cols, rows);
+  });
+  socket.on('term:close', ({ termId }) => closeDirectTerm(socket, String(termId || '1')));
 
   socket.on('screen:input', ({ sessionName, data, serverId = LOCAL_ID }) => {
     sendScreenInput(socket, serverId, sessionName, data);
@@ -992,12 +1316,16 @@ io.on('connection', (socket) => {
   // ── Notifications ──────────────────────────────────
   socket.on('watch:list', () => socket.emit('watch:list', { watches: notify.listWatches() }));
 
-  socket.on('watch:set', ({ serverId = LOCAL_ID, pid, name, on }) => {
+  socket.on('watch:set', ({ serverId = LOCAL_ID, pid, name, on, fullName, backend }) => {
     pid = String(pid || '');
-    if (!/^\d+$/.test(pid)) { socket.emit('servers:error', { message: 'Invalid session' }); return; }
+    // The id is a screen pid (numeric) or a tmux session name — both match
+    // SAFE_SESSION. Reject anything else (it reaches a shell command).
+    if (!SAFE_SESSION.test(pid)) { socket.emit('servers:error', { message: 'Invalid session' }); return; }
     const clean = String(name || '').replace(/[^\w.\-]/g, '-').slice(0, 40) || pid;
-    console.log('[watch]', on ? 'on' : 'off', serverId, pid, clean);
-    setWatch(serverId, pid, clean, !!on);
+    const fn = fullName && SAFE_SESSION.test(String(fullName)) ? String(fullName) : undefined;
+    const be = backend === 'tmux' || backend === 'screen' ? backend : undefined;
+    console.log('[watch]', on ? 'on' : 'off', serverId, pid, clean, be || '');
+    setWatch(serverId, pid, clean, !!on, { fullName: fn, backend: be });
   });
 
   socket.on('push:key', (_, cb) => {
@@ -1140,6 +1468,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', (reason) => {
     console.log('[socket] disconnected:', socket.id, 'reason:', reason);
     detachAllScreens(socket.id);
+    closeAllDirect(socket.id);
   });
 });
 

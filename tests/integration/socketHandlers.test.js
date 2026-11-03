@@ -202,7 +202,110 @@ describe('socket handlers', () => {
     });
   });
 
+  describe('direct terminal', () => {
+    it('rejects an app that is not on the allowlist', async () => {
+      const client = connectClient();
+      await waitEvent(client, 'connect');
+      const p = waitEvent(client, 'term:exit');
+      client.emit('term:open', { termId: 't1', serverId: 'local', app: 'rm -rf /', cols: 80, rows: 24 });
+      const ev = await p;
+      assert.equal(ev.termId, 't1');
+      assert.match(ev.error, /Unknown app/);
+      client.disconnect();
+    });
+
+    it('ignores input and close for an unknown terminal id', async () => {
+      const client = connectClient();
+      await waitEvent(client, 'connect');
+      // Must not throw on the server; nothing is attached under this id.
+      client.emit('term:input', { termId: 'nope', data: 'x' });
+      client.emit('term:resize', { termId: 'nope', cols: 10, rows: 10 });
+      client.emit('term:close', { termId: 'nope' });
+      // Round-trip a known request to prove the socket is still alive.
+      const p = waitEvent(client, 'term:exit');
+      client.emit('term:open', { termId: 't2', serverId: 'local', app: 'bogus', cols: 80, rows: 24 });
+      const ev = await p;
+      assert.equal(ev.termId, 't2');
+      client.disconnect();
+    });
+  });
+
+  describe('tmux backend (hub has tmux)', () => {
+    const { execSync } = require('child_process');
+    const made = [];
+    after(() => {
+      for (const n of made) {
+        try { execSync(`tmux -L termi kill-session -t ${n} 2>/dev/null || true`, { shell: '/bin/bash' }); } catch (_) {}
+      }
+    });
+
+    it('creates a tmux session, lists it with backend tmux, reads history, renames it', async () => {
+      const client = connectClient();
+      await waitEvent(client, 'connect');
+      const name = 'itest-' + Date.now().toString(36);
+      made.push(name);
+
+      let p = waitEvent(client, 'screen:list', 8000);
+      client.emit('screen:create', { serverId: 'local', name });
+      let list = await p;
+      const sess = list.sessions.find(s => s.fullName === name);
+      assert.ok(sess, 'created session appears in the list');
+      assert.equal(sess.backend, 'tmux');
+      assert.equal(sess.fullName, name); // tmux: no "<pid>." prefix
+
+      // history comes back as text (capture-pane), not an error
+      p = waitEvent(client, 'screen:history', 8000);
+      client.emit('screen:history', { serverId: 'local', sessionName: name });
+      const hist = await p;
+      assert.equal(hist.error, undefined);
+      assert.equal(typeof hist.text, 'string');
+
+      // rename keeps the plain (dot-less) tmux identity
+      const renamed = name + '-r';
+      made.push(renamed);
+      p = waitEvent(client, 'screen:renamed', 8000);
+      client.emit('screen:rename', { serverId: 'local', sessionName: name, newName: renamed });
+      const ev = await p;
+      assert.equal(ev.oldFullName, name);
+      assert.equal(ev.newFullName, renamed);
+
+      client.disconnect();
+    });
+
+    it('accepts a tmux (non-numeric) id for watch:set but still rejects shell metacharacters', async () => {
+      const client = connectClient();
+      await waitEvent(client, 'connect');
+      // metacharacters → rejected
+      let p = waitEvent(client, 'servers:error', 3000);
+      client.emit('watch:set', { serverId: 'local', pid: 'bad name; ls', name: 'x', on: true });
+      assert.match((await p).message, /Invalid session/);
+      // a plain tmux name is accepted (no servers:error); watch:list reflects it
+      const name = 'wtest-' + Date.now().toString(36);
+      made.push(name);
+      execSync(require('../../lib/muxer').tmux.createCmd(name, { scrollback: 1000 }), { shell: '/bin/bash' });
+      p = waitEvent(client, 'watch:list', 4000);
+      client.emit('watch:set', { serverId: 'local', pid: name, name, on: true, fullName: name, backend: 'tmux' });
+      const wl = await p;
+      assert.ok(wl.watches.some(w => w.pid === name && w.backend === 'tmux'));
+      client.emit('watch:set', { serverId: 'local', pid: name, name, on: false });
+      client.disconnect();
+    });
+  });
+
   describe('setAgent', () => {
+    it('switches to opencode and resets the session', async () => {
+      const client = connectClient();
+      await waitEvent(client, 'connect');
+      const p = waitEvent(client, 'agentSwitched');
+      client.emit('setAgent', { type: 'opencode' });
+      const ev = await p;
+      assert.equal(ev.agentType, 'opencode');
+      assert.equal(require('../../server').getState().agentType, 'opencode');
+      client.emit('setAgent', { type: 'agent' });
+      await waitEvent(client, 'agentSwitched');
+      client.disconnect();
+    });
+
     it('ignores invalid agent type', async () => {
       const client = connectClient();
       await waitEvent(client, 'connect');

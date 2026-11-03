@@ -10,9 +10,10 @@
 <link rel="manifest" href="/manifest.json">
 <title>termi</title>
 <script src="/socket.io/socket.io.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
-<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18.0/lib/addon-webgl.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&f[]=clash-display@600&display=swap" rel="stylesheet">
@@ -751,6 +752,16 @@
   .stv-tab-add:active { background: var(--green); color: #fff; }
 
   /* Bottom sheet (new-tab picker) */
+  /* Direct terminal overlay (full-fidelity PTY, no screen) */
+  #dterm { position: fixed; inset: 0; z-index: 60; background: #0a0a0c; display: flex; flex-direction: column; }
+  .dterm-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top)); border-bottom: 1px solid #1b1b22; }
+  .dterm-title { font-weight: 700; color: var(--green); }
+  .dterm-note { flex: 1; min-width: 0; font-size: 11px; color: #8a8a99; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dterm-btn { background: #16161c; color: #cfcfe0; border: 1px solid #2a2a33; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 14px; }
+  .dterm-btn:active { background: var(--green); color: #fff; }
+  .dterm-body { flex: 1; min-height: 0; padding: 4px 6px 6px; padding-bottom: max(6px, env(safe-area-inset-bottom)); overflow: hidden; }
+  .dterm-body .xterm { height: 100%; }
+
   .sheet-backdrop {
     position: fixed; inset: 0; z-index: 130;
     background: rgba(0,0,0,0.55); display: flex; align-items: flex-end;
@@ -1399,6 +1410,7 @@
         <h2><span id="scrTitleText">sessions</span> <span class="scr-count" id="screenCount">0</span></h2>
         <a id="backToPanes" class="dash-add-top" href="#/screens" hidden aria-label="Back to open terminal panes">&#8592; back to panes</a>
         <button type="button" class="dash-add-top" onclick="createScreenPrompt()" aria-label="Start a new screen session">+ new screen</button>
+        <button type="button" class="dash-add-top" id="directOpencodeBtn" onclick="openDirect('opencode')" hidden aria-label="Open opencode in a full-fidelity terminal (true color, no screen)">&#9889; opencode</button>
         <button type="button" class="dash-add-top" onclick="refreshScreens()" aria-label="Refresh session list">&#8635;</button>
       </div>
       <div class="dash-list" id="screenSessionList">
@@ -1463,6 +1475,7 @@
       <div class="agent-bar">
         <button class="agent-btn active" id="opt-agent" onclick="switchAgent('agent')" aria-label="Use Cursor agent">cursor</button>
         <button class="agent-btn" id="opt-claude" onclick="switchAgent('claude')" aria-label="Use Claude Code agent">claude</button>
+        <button class="agent-btn" id="opt-opencode" onclick="switchAgent('opencode')" aria-label="Use opencode agent">opencode</button>
       </div>
     </div>
 
@@ -1517,10 +1530,24 @@
 <!-- Scroll to bottom FAB -->
 <button class="scroll-fab" id="scrollFab" onclick="scrollToBottom()" aria-label="Scroll to latest messages">&#8595;</button>
 
+<!-- Direct terminal: tmux-backed, full-fidelity, persistent -->
+<div id="dterm" hidden role="dialog" aria-modal="true" aria-label="Direct terminal">
+  <div class="dterm-head">
+    <span class="dterm-title" id="dtermTitle">opencode</span>
+    <span class="dterm-note" id="dtermNote">live &middot; keeps running &middot; reopen to resume</span>
+    <button type="button" class="dterm-btn" id="dtermKbd" aria-label="Focus the terminal to type">kbd</button>
+    <button type="button" class="dterm-btn" id="dtermClose" aria-label="Leave the terminal (it keeps running)">&times;</button>
+  </div>
+  <div class="dterm-body" id="dtermBody"></div>
+  <input type="text" id="dtermHidden" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"
+         aria-hidden="true" style="position:absolute;opacity:0;height:0;width:0;border:0;padding:0;pointer-events:none">
+</div>
+
 <script>
   // ── State ───────────────────────────────────────────
   let socket=null, token='', connected=false, thinkingEl=null;
   let activeAgent='agent', lastThinkingContent='', latencyMs=null, latencyInterval=null;
+  const AGENT_NAMES={agent:'Cursor',claude:'Claude',opencode:'opencode'};
   // Route fully describes what's on screen:
   //   #/servers                        → servers dashboard (the landing view)
   //   #/srv/<id>/screens               → session list for that server
@@ -1620,7 +1647,7 @@
     });
     // Per-server readiness (chat CLI availability, session state). Purely
     // informational — never gates rendering.
-    socket.on('status',({serverId,connected:c,message,agentType,agentAvail,claudeAvail})=>{
+    socket.on('status',({serverId,connected:c,message,agentType,agentAvail,claudeAvail,opencodeAvail})=>{
       if(serverId&&serverId!==curServer)return;
       hideSplash();
       setStatus(c?'on':'err',message||'offline');
@@ -1629,13 +1656,15 @@
         if(agentType)setAgentUI(agentType);
         $('opt-agent').disabled=agentAvail===false;
         $('opt-claude').disabled=claudeAvail===false;
+        $('opt-opencode').disabled=opencodeAvail===false;
+        { const db=$('directOpencodeBtn'); if(db)db.hidden=opencodeAvail===false; }
         if(route.view==='screens'||route.view==='term')loadScreenSessions();
       }
     });
     socket.on('agentSwitched',({serverId,agentType})=>{
       if(serverId&&serverId!==curServer)return;
       activeAgent=agentType; setAgentUI(agentType);
-      showToast('switched to '+(agentType==='claude'?'Claude':'Cursor'));
+      showToast('switched to '+AGENT_NAMES[agentType]);
     });
     socket.on('response',({serverId,type,content})=>{
       if(serverId&&serverId!==curServer)return;
@@ -1664,6 +1693,13 @@
     socket.on('screen:list',({serverId,sessions})=>{
       if(serverId&&serverId!==(route.server||curServer))return;
       renderScreenList(sessions);
+    });
+    socket.on('term:data',({termId,data})=>{ if(dterm&&termId===dterm.id&&data)dterm.term.write(data); });
+    socket.on('term:exit',({termId,exitCode,error})=>{
+      if(!dterm||termId!==dterm.id)return;
+      if(error)showToast('terminal: '+error);
+      else showToast('terminal exited'+(exitCode?(' ('+exitCode+')'):''));
+      closeDirect(true);
     });
     socket.on('screen:output',({serverId,sessionName,data})=>{
       if(serverId&&route.server&&serverId!==route.server)return;
@@ -2096,7 +2132,7 @@
     const b=a.querySelector('.scr-badge');
     b.className='scr-badge '+(live?'live':'idle');
     b.textContent=live?'live':'idle';
-    a.querySelector('.scr-pid').textContent='pid '+s.pid;
+    a.querySelector('.scr-pid').textContent=s.backend==='tmux'?'tmux':'pid '+s.pid;
     a.querySelector('.scr-open').hidden=!open;
   }
 
@@ -2624,6 +2660,11 @@
   // on touch devices every tap/drag became a mouse report dumped into the
   // app's input. We don't use terminal mouse on mobile (the key bar + input
   // bar drive everything), so dropping these reports is purely upside.
+  // Mouse reports (SGR/X10/urxvt) are stripped from what we send to the
+  // session: termi never enables mouse mode (the hub filters the enabling
+  // sequences out, see lib/termfilter.js), so any report xterm produces on
+  // a stray touch or move is noise that would otherwise land as text in a
+  // CLI's input.
   function stripMouseReports(d){
     return d
       .replace(/\x1b\[<\d+;\d+;\d+[Mm]/g,'')   // SGR mode (1006)
@@ -2715,6 +2756,104 @@
     el.addEventListener('contextmenu',e=>{ if(selecting||pressTimer)e.preventDefault(); });
   }
 
+  // WebGL renderer: full-screen TUIs repaint every frame, which the DOM
+  // renderer can't keep up with on a phone. Falls back silently (no WebGL,
+  // context lost) to the default renderer. Disable with localStorage
+  // termi_webgl=off.
+  function loadWebgl(term){
+    if(typeof WebglAddon==='undefined'||localStorage.getItem('termi_webgl')==='off')return;
+    try{
+      const gl=new WebglAddon.WebglAddon();
+      gl.onContextLoss(()=>{ try{gl.dispose();}catch(_){} });
+      term.loadAddon(gl);
+    }catch(_){}
+  }
+
+  // ── Direct terminal (full-fidelity PTY, no screen) ───
+  // Launches an allowlisted app (opencode) in a server-owned PTY and streams
+  // raw bytes to xterm.js: true color, alternate screen and mouse all intact,
+  // exactly like a real terminal. GNU screen — which downconverts opencode's
+  // 24-bit color on a normal attach — is not in the path. Ephemeral: closing
+  // the overlay or dropping the socket ends the app (the server kills it).
+  const DTERM_THEME={
+    background:'#0a0a0c',foreground:'#e8e8ef',cursor:'#6e72f0',
+    selectionBackground:'#6ba1ff44',
+    black:'#0a0a0c',red:'#ff6b6b',green:'#22dd88',yellow:'#ffb347',
+    blue:'#6ba1ff',magenta:'#c084fc',cyan:'#22d3ee',white:'#e8e8ef',
+    brightBlack:'#555568',brightRed:'#ff8a80',brightGreen:'#69f0ae',
+    brightYellow:'#ffd740',brightBlue:'#82b1ff',brightMagenta:'#ea80fc',
+    brightCyan:'#84ffff',brightWhite:'#ffffff',
+  };
+  let dterm=null; // { id, term, fit, ro, serverId, app }
+  function openDirect(app){
+    if(!socket||!connected){showToast('not connected');return;}
+    if(dterm)closeDirect(true);
+    const serverId=route.server||curServer||'local';
+    const id='d'+Date.now().toString(36);
+    const body=$('dtermBody'); body.innerHTML='';
+    $('dtermTitle').textContent=app;
+    $('dtermNote').textContent='live · keeps running · reopen to resume';
+    $('dterm').hidden=false;
+    const term=new Terminal({
+      cursorBlink:true, cursorStyle:'block', fontSize:screenTermFontSize(1),
+      fontFamily:'JetBrains Mono, SF Mono, monospace',
+      theme:DTERM_THEME, scrollback:5000, allowProposedApi:true,
+    });
+    const fit=new FitAddon.FitAddon();
+    term.loadAddon(fit); term.open(body); loadWebgl(term);
+    const helper=body.querySelector('.xterm-helper-textarea'); if(helper)helper.setAttribute('aria-hidden','true');
+    dterm={id,term,fit,serverId,app,ro:null};
+    try{fit.fit();}catch(_){}
+    // Raw input straight to the app, mouse reports included — the app itself
+    // enabled mouse mode and reads the reports directly, which is correct
+    // here; there is no screen in between to turn them into stray text.
+    term.onData(d=>{ if(socket&&dterm&&dterm.id===id)socket.emit('term:input',{termId:id,data:d}); });
+    enableDirectTouch(term,body);
+    socket.emit('term:open',{termId:id,serverId,app,cols:term.cols||80,rows:term.rows||24});
+    const sync=()=>{ if(!dterm||dterm.id!==id)return; try{fit.fit();}catch(_){}
+      if(socket)socket.emit('term:resize',{termId:id,cols:term.cols||80,rows:term.rows||24}); };
+    setTimeout(sync,120); setTimeout(sync,400);
+    try{ dterm.ro=new ResizeObserver(()=>sync()); dterm.ro.observe(body); }catch(_){}
+    setTimeout(()=>{ try{term.focus();}catch(_){} },220);
+    haptic('medium');
+  }
+  function closeDirect(silent){
+    if(!dterm)return;
+    const d=dterm; dterm=null;
+    if(socket)socket.emit('term:close',{termId:d.id});
+    try{ d.ro&&d.ro.disconnect(); }catch(_){}
+    try{ d.term.dispose(); }catch(_){}
+    $('dtermBody').innerHTML='';
+    $('dterm').hidden=true;
+    if(!silent)haptic('light');
+  }
+  // Touch scroll inside the direct terminal: hand the app wheel events when
+  // it has the mouse (opencode scrolls its chat), otherwise scroll xterm.
+  function enableDirectTouch(term,el){
+    let lastY=null,carry=0;
+    const hasMouse=()=>{ const m=term.modes&&term.modes.mouseTrackingMode; return !!m&&m!=='none'; };
+    el.addEventListener('touchstart',e=>{ if(e.touches.length!==1){lastY=null;return;} lastY=e.touches[0].clientY; carry=0; },{passive:true});
+    el.addEventListener('touchmove',e=>{
+      if(lastY===null||e.touches.length!==1)return;
+      const t=e.touches[0], y=t.clientY;
+      const cell=term._core?._renderService?.dimensions?.css?.cell?.height||(term.rows?el.clientHeight/term.rows:16)||16;
+      carry+=lastY-y; lastY=y;
+      const lines=Math.trunc(carry/cell);
+      if(lines){ carry-=lines*cell;
+        if(hasMouse()){
+          const scr=el.querySelector('.xterm-screen')||el;
+          for(let i=0;i<Math.min(Math.abs(lines),term.rows||24);i++)
+            scr.dispatchEvent(new WheelEvent('wheel',{deltaY:lines>0?1:-1,deltaMode:WheelEvent.DOM_DELTA_LINE,clientX:t.clientX,clientY:t.clientY,bubbles:true,cancelable:true}));
+        } else term.scrollLines(lines);
+      }
+      if(e.cancelable)e.preventDefault();
+    },{passive:false});
+    el.addEventListener('touchend',()=>{lastY=null;},{passive:true});
+  }
+  { const cb=$('dtermClose'); if(cb)cb.addEventListener('click',()=>closeDirect());
+    const kb=$('dtermKbd'); if(kb)kb.addEventListener('click',()=>{ if(dterm){try{dterm.term.focus();}catch(_){}} }); }
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&dterm&&!$('dterm').hidden)closeDirect(); });
+
   function createPane(fullName){
     const meta=metaFor(fullName);
     const c=$('screenTermContainer');
@@ -2747,6 +2886,7 @@
     });
     const fit=new FitAddon.FitAddon();
     term.loadAddon(fit); term.open(pane.querySelector('.scr-pane-term'));
+    loadWebgl(term);
     // xterm's hidden helper textarea confuses accessibility/automation snapshots;
     // the visible input bar below is the intended typing target.
     const helper=pane.querySelector('.xterm-helper-textarea');
@@ -2754,7 +2894,7 @@
     const sid=route.server||curServer; // panes belong to the server they were opened on
     enableTouchScroll(term,pane.querySelector('.scr-pane-term'),fullName);
     term.onData(d=>{const clean=stripMouseReports(d);if(socket&&clean)socket.emit('screen:input',{serverId:sid,sessionName:fullName,data:clean});});
-    const p={term,fit,paneEl:pane,name:meta.name,status:meta.status,serverId:sid,sentCols:0,sentRows:0};
+    const p={term,fit,paneEl:pane,name:meta.name,status:meta.status,backend:meta.backend,serverId:sid,sentCols:0,sentRows:0};
     screenPanes.set(fullName,p);
     pane.addEventListener('mousedown',()=>focusPane(fullName));
     pane.addEventListener('touchstart',()=>focusPane(fullName),{passive:true});
@@ -3560,7 +3700,7 @@
     if(!p||!socket||!connected){ showToast('no session'); return; }
     const on=!isWatched(); haptic('light');
     if(on)await ensurePush();
-    socket.emit('watch:set',{serverId:p.serverId,pid:focusedPid(),name:p.name,on});
+    socket.emit('watch:set',{serverId:p.serverId,pid:focusedPid(),name:p.name,on,fullName:focusedScreen,backend:p.backend});
     showToast(on?'will notify when '+p.name+' goes quiet':'notifications off for '+p.name);
   }
   function b64ToU8(b64){
