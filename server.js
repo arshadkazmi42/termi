@@ -60,7 +60,7 @@ registry.setSecret(AUTH_TOKEN);
 // there can read them by path: WORK_DIR/.termi/uploads locally,
 // ~/.termi-uploads over SFTP for remote servers.
 const UPLOAD_DIR = path.join(WORK_DIR, '.termi', 'uploads');
-const UPLOAD_MAX = 15 * 1024 * 1024;
+const UPLOAD_MAX = 100 * 1024 * 1024;
 const UPLOAD_TTL = 7 * 24 * 3600 * 1000;
 
 function pruneUploads() {

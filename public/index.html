@@ -3101,7 +3101,7 @@
   $('termFileInput').addEventListener('change',async e=>{
     const files=[...e.target.files]; e.target.value='';
     for(const f of files){
-      if(f.size>15*1024*1024){ showToast((f.name||'file')+': too big (15MB max)'); continue; }
+      if(f.size>100*1024*1024){ showToast((f.name||'file')+': too big (100MB max)'); continue; }
       showToast('uploading '+(f.name||'file')+'...');
       try{
         const res=await fetch('/upload?serverId='+encodeURIComponent(route.server||curServer)+'&name='+encodeURIComponent(f.name||'file'),{
@@ -3431,7 +3431,7 @@
 
   function addAttachFiles(files){
     files.forEach((f,i)=>{
-      if(f.size>15*1024*1024){ showToast(f.name+': too big (15MB max)'); return; }
+      if(f.size>100*1024*1024){ showToast(f.name+': too big (100MB max)'); return; }
       const a={name:f.name||('pasted-'+(attachments.length+i+1)+'.png'),path:null,uploading:true,error:null};
       attachments.push(a);
       uploadAttachment(f,a);

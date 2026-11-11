@@ -1,4 +1,4 @@
-const CACHE = 'termi-v13';
+const CACHE = 'termi-v14';
 const PRECACHE = ['/', '/manifest.json'];
 
 self.addEventListener('install', (e) => {
